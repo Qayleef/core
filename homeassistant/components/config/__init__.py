@@ -59,5 +59,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             hass.bus.async_fire(
                 EVENT_COMPONENT_LOADED, EventComponentLoaded(component=key)
             )
+            logger.info(f"Config component '{key}' has been loaded.")
+        else:
+            # Log the setup failure
+            logger.error(f"Failed to load config component '{panel.__name__}'.")
+
 
     return True
