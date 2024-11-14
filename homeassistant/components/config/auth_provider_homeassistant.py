@@ -6,10 +6,23 @@ from typing import Any
 
 import voluptuous as vol
 
+import logging
+
 from homeassistant.auth.providers import homeassistant as auth_ha
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import Unauthorized
+
+
+logger = logging.getLogger(__name__)
+
+# Example in `websocket_admin_change_password`
+logger.info(f"Admin {connection.user.id} changed password for user {msg['user_id']}")
+
+def send_generic_error(connection, msg_id, reason="invalid_request"):
+    """Send a generic error response to avoid exposing details."""
+    connection.send_error(msg_id, reason, "Request could not be completed")
+
 
 
 @callback
