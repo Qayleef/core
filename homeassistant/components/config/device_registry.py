@@ -5,6 +5,8 @@ from __future__ import annotations
 from typing import Any, cast
 
 import voluptuous as vol
+import logging
+
 
 from homeassistant import loader
 from homeassistant.components import websocket_api
@@ -13,6 +15,79 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceEntry, DeviceEntryDisabler
+
+logger = logging.getLogger(__name__)
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        "type": "config/device_registry/remove_config_entry",
+        "config_entry_id": str,
+        "device_id": str,
+    }
+)
+@websocket_api.async_response
+async def websocket_remove_config_entry_from_device(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Remove config entry from a device with enhanced security and logging."""
+    registry = dr.async_get(hass)
+    config_entry_id = msg["config_entry_id"]
+    device_id = msg["device_id"]
+    user = connection.user
+
+    # Log the attempt for security auditing
+    logger.info(
+        f"User {user.id} attempting to remove config entry {config_entry_id} from device {device_id}"
+    )
+
+    def send_error_response(message):
+        connection.send_error(msg["id"], websocket_api.ERR_NOT_FOUND, message)
+
+    if (config_entry := hass.config_entries.async_get_entry(config_entry_id)) is None:
+        send_error_response("Config entry not found or inaccessible")
+        return
+
+    if not config_entry.supports_remove_device:
+        send_error_response("Config entry does not support device removal")
+        return
+
+    if (device_entry := registry.async_get(device_id)) is None:
+        send_error_response("Device not found or inaccessible")
+        return
+
+    if config_entry_id not in device_entry.config_entries:
+        send_error_response("Config entry not in device")
+        return
+
+    try:
+        integration = await loader.async_get_integration(hass, config_entry.domain)
+        component = await integration.async_get_component()
+    except (ImportError, loader.IntegrationNotFound) as exc:
+        send_error_response("Integration not found")
+        logger.error(f"Integration {config_entry.domain} not found: {exc}")
+        return
+
+    if not await component.async_remove_config_entry_device(
+        hass, config_entry, device_entry
+    ):
+        send_error_response("Failed to remove device entry, rejected by integration")
+        return
+
+    # Update registry if the integration hasn't removed the device entry already.
+    if registry.async_get(device_id):
+        entry = registry.async_update_device(
+            device_id, remove_config_entry_id=config_entry_id
+        )
+        entry_as_dict = entry.dict_repr if entry else None
+    else:
+        entry_as_dict = None
+
+    connection.send_message(websocket_api.result_message(msg["id"], entry_as_dict))
+
+
 
 
 @callback
