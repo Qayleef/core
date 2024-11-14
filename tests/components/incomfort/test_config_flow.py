@@ -11,6 +11,7 @@ from homeassistant.config_entries import SOURCE_IMPORT, SOURCE_USER
 from homeassistant.const import CONF_HOST, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.const import CONF_HOST
 
 from .conftest import MOCK_CONFIG
 
@@ -157,3 +158,32 @@ async def test_form_validation(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert "errors" not in result
+
+async def test_invalid_host(
+    hass: HomeAssistant, mock_incomfort: MagicMock
+) -> None:
+    """Test handling of an invalid host in the configuration."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+
+    # Simulate invalid host
+    invalid_config = MOCK_CONFIG.copy()
+    invalid_config[CONF_HOST] = "invalid-host"
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], invalid_config
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
+
+    # Retry with valid host
+    valid_config = MOCK_CONFIG
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], valid_config
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Intergas InComfort/Intouch Lan2RF gateway"
+    assert result["data"] == MOCK_CONFIG
