@@ -187,3 +187,4 @@ async def test_invalid_host(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Intergas InComfort/Intouch Lan2RF gateway"
     assert result["data"] == MOCK_CONFIG
+
