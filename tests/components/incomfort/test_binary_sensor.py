@@ -37,12 +37,25 @@ async def test_setup_platform(
             "is_failed": True,
             "display_code": None,
             "fault_code": FaultCode.CV_TEMPERATURE_TOO_HIGH_E1,
+        }, 
+        MOCK_HEATER_STATUS
+        | {
+            "is_failed": True,
+            "display_code": None,
+            "fault_code": FaultCode.WATER_PRESSURE_TOO_LOW_E2,
+        },
+        MOCK_HEATER_STATUS
+        | {
+            "is_failed": False,
+            "is_pumping": False,
+            "is_burning": False,
+            "is_tapping": False,
         },
         MOCK_HEATER_STATUS | {"is_pumping": True},
         MOCK_HEATER_STATUS | {"is_burning": True},
         MOCK_HEATER_STATUS | {"is_tapping": True},
     ],
-    ids=["is_failed", "is_pumping", "is_burning", "is_tapping"],
+    ids=["is_failed", "is_pumping", "is_burning", "is_tapping","temperature_too_high", "pressure_too_low", "all_inactive"],
 )
 @patch("homeassistant.components.incomfort.PLATFORMS", [Platform.BINARY_SENSOR])
 async def test_setup_binary_sensors_alt(
