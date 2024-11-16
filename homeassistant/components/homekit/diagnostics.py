@@ -21,7 +21,9 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     """Return diagnostics for a config entry."""
     homekit = entry.runtime_data.homekit
-    data: dict[str, Any] = {
+
+    # Prepare base diagnostic data
+    data = {
         "status": homekit.status,
         "config-entry": {
             "title": entry.title,
@@ -30,27 +32,35 @@ async def async_get_config_entry_diagnostics(
             "options": dict(entry.options),
         },
     }
+
+    # Include IID storage if available
     if homekit.iid_storage:
         data["iid_storage"] = homekit.iid_storage.allocations
-    if not homekit.driver:  # not started yet or startup failed
+
+    # If the driver is not available or failed, return the current data
+    if not homekit.driver:
         return data
+
     driver: AccessoryDriver = homekit.driver
+
+    # Add diagnostics for the accessory or bridge
     if driver.accessory:
         if isinstance(driver.accessory, HomeBridge):
             data["bridge"] = _get_bridge_diagnostics(hass, driver.accessory)
         else:
             data["accessory"] = _get_accessory_diagnostics(hass, driver.accessory)
+
+    # Update data with driver accessory details
     data.update(driver.get_accessories())
+
+    # Add client properties and configuration details
     state: State = driver.state
-    data.update(
-        {
-            "client_properties": {
-                str(client): props for client, props in state.client_properties.items()
-            },
-            "config_version": state.config_version,
-            "pairing_id": state.mac,
-        }
-    )
+    data["client_properties"] = {
+        str(client): props for client, props in state.client_properties.items()
+    }
+    data["config_version"] = state.config_version
+    data["pairing_id"] = state.mac
+
     return data
 
 
@@ -66,9 +76,10 @@ def _get_accessory_diagnostics(
     hass: HomeAssistant, accessory: HomeAccessory
 ) -> dict[str, Any]:
     """Return diagnostics for an accessory."""
-    entity_state = None
-    if accessory.entity_id:
-        entity_state = hass.states.get(accessory.entity_id)
+    # Get entity state if available
+    entity_state = hass.states.get(accessory.entity_id) if accessory.entity_id else None
+
+    # Prepare base diagnostic data
     data = {
         "aid": accessory.aid,
         "config": accessory.config,
@@ -76,6 +87,9 @@ def _get_accessory_diagnostics(
         "name": accessory.display_name,
         "entity_id": accessory.entity_id,
     }
+
+    # Include entity state if available
     if entity_state:
         data["entity_state"] = async_redact_data(entity_state, TO_REDACT)
+
     return data

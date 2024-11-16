@@ -67,14 +67,21 @@ class Lock(HomeAccessory):
         assert state is not None
 
         serv_lock_mechanism = self.add_preload_service(SERV_LOCK)
+
+        # Set up the current state and target state configuration
         self.char_current_state = serv_lock_mechanism.configure_char(
-            CHAR_LOCK_CURRENT_STATE, value=HASS_TO_HOMEKIT_CURRENT[STATE_UNKNOWN]
+            CHAR_LOCK_CURRENT_STATE,
+            value=HASS_TO_HOMEKIT_CURRENT.get(STATE_UNKNOWN, STATE_UNKNOWN),
         )
+
         self.char_target_state = serv_lock_mechanism.configure_char(
             CHAR_LOCK_TARGET_STATE,
-            value=HASS_TO_HOMEKIT_CURRENT[LockState.LOCKED.value],
+            value=HASS_TO_HOMEKIT_CURRENT.get(
+                LockState.LOCKED.value, LockState.LOCKED.value
+            ),
             setter_callback=self.set_state,
         )
+
         self.async_update_state(state)
 
     def set_state(self, value: int) -> None:
@@ -98,7 +105,7 @@ class Lock(HomeAccessory):
         )
         target_lock_state = HASS_TO_HOMEKIT_TARGET.get(hass_state)
         _LOGGER.debug(
-            "%s: Updated current state to %s (current=%d) (target=%s)",
+            "%s: Updated lock state. Current state: %s (current=%d), Target state: %s",
             self.entity_id,
             hass_state,
             current_lock_state,
@@ -113,4 +120,5 @@ class Lock(HomeAccessory):
         # Set lock current state ONLY after ensuring that
         # target state is correct or there will be no
         # notification
-        self.char_current_state.set_value(current_lock_state)
+        if current_lock_state is not None:
+            self.char_current_state.set_value(current_lock_state)
