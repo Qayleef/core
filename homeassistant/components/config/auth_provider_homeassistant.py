@@ -16,8 +16,7 @@ from homeassistant.exceptions import Unauthorized
 
 logger = logging.getLogger(__name__)
 
-# Example in `websocket_admin_change_password`
-logger.info(f"Admin {connection.user.id} changed password for user {msg['user_id']}")
+
 
 def send_generic_error(connection, msg_id, reason="invalid_request"):
     """Send a generic error response to avoid exposing details."""
@@ -192,6 +191,7 @@ async def websocket_admin_change_password(
 
     await provider.async_change_password(username, msg["password"])
     connection.send_result(msg["id"])
+    logger.info(f"Admin {connection.user.id} changed password for user {msg['user_id']}")
 
 
 @websocket_api.websocket_command(
