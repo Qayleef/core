@@ -353,14 +353,17 @@ class WeatherEntity(Entity, PostInit, cached_properties=CACHED_PROPERTIES_WITH_A
     def _temperature_unit(self) -> str:
         """Return the converted unit of measurement for temperature.
 
-        Should not be set by integrations.
+        Implements caching for optimized access.
         """
-        if (
-            weather_option_temperature_unit := self._weather_option_temperature_unit
-        ) is not None:
-            return weather_option_temperature_unit
+        if not hasattr(self, "_cached_temperature_unit"):
+            if (
+                weather_option_temperature_unit := self._weather_option_temperature_unit
+            ) is not None:
+                self._cached_temperature_unit = weather_option_temperature_unit
+            else:
+                self._cached_temperature_unit = self._default_temperature_unit
 
-        return self._default_temperature_unit
+        return self._cached_temperature_unit
 
     @cached_property
     def native_pressure(self) -> float | None:
@@ -549,135 +552,91 @@ class WeatherEntity(Entity, PostInit, cached_properties=CACHED_PROPERTIES_WITH_A
     @final
     @property
     def state_attributes(self) -> dict[str, Any]:
-        """Return the state attributes, converted.
-
-        Attributes are configured from native units to user-configured units.
-        """
-        data: dict[str, Any] = {}
-
+        """Return the state attributes, with optimized access and conversion."""
+        data = {}
         precision = self.precision
 
-        if (temperature := self.native_temperature) is not None:
-            from_unit = self.native_temperature_unit or self._default_temperature_unit
-            to_unit = self._temperature_unit
-            try:
-                temperature_f = float(temperature)
-                value_temp = UNIT_CONVERSIONS[ATTR_WEATHER_TEMPERATURE_UNIT](
-                    temperature_f, from_unit, to_unit
-                )
-                data[ATTR_WEATHER_TEMPERATURE] = round_temperature(
-                    value_temp, precision
-                )
-            except (TypeError, ValueError):
-                data[ATTR_WEATHER_TEMPERATURE] = temperature
+        def convert_and_round(value, from_unit, to_unit):
+            if from_unit in UNIT_CONVERSIONS and to_unit in UNIT_CONVERSIONS:
+                try:
+                    converted_value = UNIT_CONVERSIONS[from_unit](float(value), from_unit, to_unit)
+                    return round(converted_value, ROUNDING_PRECISION)
+                except (TypeError, ValueError):
+                    pass
+            return value  # Return the original value if conversion is not possible
 
-        if (apparent_temperature := self.native_apparent_temperature) is not None:
-            from_unit = self.native_temperature_unit or self._default_temperature_unit
-            to_unit = self._temperature_unit
-            try:
-                apparent_temperature_f = float(apparent_temperature)
-                value_apparent_temp = UNIT_CONVERSIONS[ATTR_WEATHER_TEMPERATURE_UNIT](
-                    apparent_temperature_f, from_unit, to_unit
-                )
-                data[ATTR_WEATHER_APPARENT_TEMPERATURE] = round_temperature(
-                    value_apparent_temp, precision
-                )
-            except (TypeError, ValueError):
-                data[ATTR_WEATHER_APPARENT_TEMPERATURE] = apparent_temperature
-
-        if (dew_point := self.native_dew_point) is not None:
-            from_unit = self.native_temperature_unit or self._default_temperature_unit
-            to_unit = self._temperature_unit
-            try:
-                dew_point_f = float(dew_point)
-                value_dew_point = UNIT_CONVERSIONS[ATTR_WEATHER_TEMPERATURE_UNIT](
-                    dew_point_f, from_unit, to_unit
-                )
-                data[ATTR_WEATHER_DEW_POINT] = round_temperature(
-                    value_dew_point, precision
-                )
-            except (TypeError, ValueError):
-                data[ATTR_WEATHER_DEW_POINT] = dew_point
-
+        # Temperature attributes
+        if self.native_temperature is not None:
+            data[ATTR_WEATHER_TEMPERATURE] = convert_and_round(
+                self.native_temperature,
+                self.native_temperature_unit or self._default_temperature_unit,
+                self._temperature_unit
+            )
         data[ATTR_WEATHER_TEMPERATURE_UNIT] = self._temperature_unit
 
-        if (humidity := self.humidity) is not None:
-            data[ATTR_WEATHER_HUMIDITY] = round(humidity)
+        if self.native_apparent_temperature is not None:
+            data[ATTR_WEATHER_APPARENT_TEMPERATURE] = convert_and_round(
+                self.native_apparent_temperature,
+                self.native_temperature_unit or self._default_temperature_unit,
+                self._temperature_unit
+            )
 
-        if (ozone := self.ozone) is not None:
-            data[ATTR_WEATHER_OZONE] = ozone
+        if self.native_dew_point is not None:
+            data[ATTR_WEATHER_DEW_POINT] = convert_and_round(
+                self.native_dew_point,
+                self.native_temperature_unit or self._default_temperature_unit,
+                self._temperature_unit
+            )
 
-        if (cloud_coverage := self.cloud_coverage) is not None:
-            data[ATTR_WEATHER_CLOUD_COVERAGE] = cloud_coverage
+        # Humidity, Ozone, Cloud Coverage, UV Index
+        if self.humidity is not None:
+            data[ATTR_WEATHER_HUMIDITY] = round(self.humidity)
+        if self.ozone is not None:
+            data[ATTR_WEATHER_OZONE] = self.ozone
+        if self.cloud_coverage is not None:
+            data[ATTR_WEATHER_CLOUD_COVERAGE] = self.cloud_coverage
+        if self.uv_index is not None:
+            data[ATTR_WEATHER_UV_INDEX] = self.uv_index
 
-        if (uv_index := self.uv_index) is not None:
-            data[ATTR_WEATHER_UV_INDEX] = uv_index
-
-        if (pressure := self.native_pressure) is not None:
-            from_unit = self.native_pressure_unit or self._default_pressure_unit
-            to_unit = self._pressure_unit
-            try:
-                pressure_f = float(pressure)
-                value_pressure = UNIT_CONVERSIONS[ATTR_WEATHER_PRESSURE_UNIT](
-                    pressure_f, from_unit, to_unit
-                )
-                data[ATTR_WEATHER_PRESSURE] = round(value_pressure, ROUNDING_PRECISION)
-            except (TypeError, ValueError):
-                data[ATTR_WEATHER_PRESSURE] = pressure
-
+        # Pressure attributes
+        if self.native_pressure is not None:
+            data[ATTR_WEATHER_PRESSURE] = convert_and_round(
+                self.native_pressure,
+                self.native_pressure_unit or self._default_pressure_unit,
+                self._pressure_unit
+            )
         data[ATTR_WEATHER_PRESSURE_UNIT] = self._pressure_unit
 
-        if (wind_bearing := self.wind_bearing) is not None:
-            data[ATTR_WEATHER_WIND_BEARING] = wind_bearing
-
-        if (wind_gust_speed := self.native_wind_gust_speed) is not None:
-            from_unit = self.native_wind_speed_unit or self._default_wind_speed_unit
-            to_unit = self._wind_speed_unit
-            try:
-                wind_gust_speed_f = float(wind_gust_speed)
-                value_wind_gust_speed = UNIT_CONVERSIONS[ATTR_WEATHER_WIND_SPEED_UNIT](
-                    wind_gust_speed_f, from_unit, to_unit
-                )
-                data[ATTR_WEATHER_WIND_GUST_SPEED] = round(
-                    value_wind_gust_speed, ROUNDING_PRECISION
-                )
-            except (TypeError, ValueError):
-                data[ATTR_WEATHER_WIND_GUST_SPEED] = wind_gust_speed
-
-        if (wind_speed := self.native_wind_speed) is not None:
-            from_unit = self.native_wind_speed_unit or self._default_wind_speed_unit
-            to_unit = self._wind_speed_unit
-            try:
-                wind_speed_f = float(wind_speed)
-                value_wind_speed = UNIT_CONVERSIONS[ATTR_WEATHER_WIND_SPEED_UNIT](
-                    wind_speed_f, from_unit, to_unit
-                )
-                data[ATTR_WEATHER_WIND_SPEED] = round(
-                    value_wind_speed, ROUNDING_PRECISION
-                )
-            except (TypeError, ValueError):
-                data[ATTR_WEATHER_WIND_SPEED] = wind_speed
-
+        # Wind attributes
+        if self.native_wind_speed is not None:
+            data[ATTR_WEATHER_WIND_SPEED] = convert_and_round(
+                self.native_wind_speed,
+                self.native_wind_speed_unit or self._default_wind_speed_unit,
+                self._wind_speed_unit
+            )
         data[ATTR_WEATHER_WIND_SPEED_UNIT] = self._wind_speed_unit
+        if self.native_wind_gust_speed is not None:
+            data[ATTR_WEATHER_WIND_GUST_SPEED] = convert_and_round(
+                self.native_wind_gust_speed,
+                self.native_wind_speed_unit or self._default_wind_speed_unit,
+                self._wind_speed_unit
+            )
+        if self.wind_bearing is not None:
+            data[ATTR_WEATHER_WIND_BEARING] = self.wind_bearing
 
-        if (visibility := self.native_visibility) is not None:
-            from_unit = self.native_visibility_unit or self._default_visibility_unit
-            to_unit = self._visibility_unit
-            try:
-                visibility_f = float(visibility)
-                value_visibility = UNIT_CONVERSIONS[ATTR_WEATHER_VISIBILITY_UNIT](
-                    visibility_f, from_unit, to_unit
-                )
-                data[ATTR_WEATHER_VISIBILITY] = round(
-                    value_visibility, ROUNDING_PRECISION
-                )
-            except (TypeError, ValueError):
-                data[ATTR_WEATHER_VISIBILITY] = visibility
-
+        # Visibility
+        if self.native_visibility is not None:
+            data[ATTR_WEATHER_VISIBILITY] = convert_and_round(
+                self.native_visibility,
+                self.native_visibility_unit or self._default_visibility_unit,
+                self._visibility_unit
+            )
         data[ATTR_WEATHER_VISIBILITY_UNIT] = self._visibility_unit
         data[ATTR_WEATHER_PRECIPITATION_UNIT] = self._precipitation_unit
 
         return data
+
+    #end new
 
     @final
     def _convert_forecast(
