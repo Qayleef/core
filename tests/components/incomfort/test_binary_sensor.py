@@ -55,7 +55,15 @@ async def test_setup_platform(
         MOCK_HEATER_STATUS | {"is_burning": True},
         MOCK_HEATER_STATUS | {"is_tapping": True},
     ],
-    ids=["is_failed", "is_pumping", "is_burning", "is_tapping","temperature_too_high", "pressure_too_low", "all_inactive"],
+    ids=[
+        "is_failed",
+        "is_pumping",
+        "is_burning",
+        "is_tapping",
+        "temperature_too_high",
+        "pressure_too_low",
+        "all_inactive",
+    ],
 )
 @patch("homeassistant.components.incomfort.PLATFORMS", [Platform.BINARY_SENSOR])
 async def test_setup_binary_sensors_alt(
