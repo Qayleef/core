@@ -12,7 +12,6 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
-
 from .conftest import MOCK_CONFIG
 
 from tests.common import MockConfigEntry
