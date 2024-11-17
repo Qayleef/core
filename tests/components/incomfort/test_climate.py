@@ -17,8 +17,8 @@ from tests.common import snapshot_platform
 @pytest.mark.parametrize(
     "mock_room_status",
     [
-        {"room_temp": 21.42, "setpoint": 18.0, "override": 18.0},
-        {"room_temp": 21.42, "setpoint": 18.0, "override": 0.0},
+        {"room_temp": 21.42, "setpoint": 18.0, "override": 17.0},
+        {"room_temp": 21.42, "setpoint": 18.0, "override": 1.0},
         {"room_temp": 5.0, "setpoint": 18.0, "override": 18.0},
         {"room_temp": 30.0, "setpoint": 18.0, "override": 18.0},
         {"room_temp": 21.42, "setpoint": 18.0, "override": 18.0},
