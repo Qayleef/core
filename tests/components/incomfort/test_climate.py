@@ -25,14 +25,16 @@ from tests.common import snapshot_platform
         {"room_temp": 21.42, "setpoint": None, "override": 18.0},
         {"room_temp": None, "setpoint": 18.0, "override": None},
     ],
-    ids=["new_thermostat", 
+    ids=[
+        "new_thermostat", 
          "legacy_thermostat",
          "low_temp",
         "high_temp",
         "override_high",
         "override_low",
         "missing_setpoint",
-        "missing_temp_and_override"],
+        "missing_temp_and_override"
+    ],
 )
 async def test_setup_platform(
     hass: HomeAssistant,
