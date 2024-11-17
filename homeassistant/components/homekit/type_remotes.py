@@ -218,38 +218,42 @@ class RemoteInputSelectAccessory(HomeAccessory, ABC):
 
 @TYPES.register("ActivityRemote")
 class ActivityRemote(RemoteInputSelectAccessory):
-    """Generate a Activity Remote accessory."""
+    """Generate an Activity Remote accessory."""
 
     def __init__(self, *args: Any) -> None:
-        """Initialize a Activity Remote accessory object."""
+        """Initialize an Activity Remote accessory object."""
         super().__init__(
             RemoteEntityFeature.ACTIVITY,
             ATTR_CURRENT_ACTIVITY,
             ATTR_ACTIVITY_LIST,
             *args,
         )
+        self._initialize_state()
+
+    def _initialize_state(self) -> None:
+        """Initialize the state of the remote accessory."""
         state = self.hass.states.get(self.entity_id)
         assert state
         self.async_update_state(state)
 
     def set_on_off(self, value: bool) -> None:
-        """Move switch state to value if call came from HomeKit."""
+        """Set the remote's on/off state if the call came from HomeKit."""
         _LOGGER.debug('%s: Set switch state for "on_off" to %s', self.entity_id, value)
         service = SERVICE_TURN_ON if value else SERVICE_TURN_OFF
-        params = {ATTR_ENTITY_ID: self.entity_id}
-        self.async_call_service(REMOTE_DOMAIN, service, params)
+        self._call_service(service)
 
     def set_input_source(self, value: int) -> None:
-        """Send input set value if call came from HomeKit."""
+        """Set the input source if the call came from HomeKit."""
         _LOGGER.debug("%s: Set current input to %s", self.entity_id, value)
         source = self._mapped_sources[self.sources[value]]
         params = {ATTR_ENTITY_ID: self.entity_id, ATTR_ACTIVITY: source}
-        self.async_call_service(REMOTE_DOMAIN, SERVICE_TURN_ON, params)
+        self._call_service(SERVICE_TURN_ON, params)
 
     def set_remote_key(self, value: int) -> None:
-        """Send remote key value if call came from HomeKit."""
+        """Send remote key value if the call came from HomeKit."""
         _LOGGER.debug("%s: Set remote key to %s", self.entity_id, value)
-        if (key_name := REMOTE_KEYS.get(value)) is None:
+        key_name = REMOTE_KEYS.get(value)
+        if key_name is None:
             _LOGGER.warning("%s: Unhandled key press for %s", self.entity_id, value)
             return
         self.hass.bus.async_fire(
@@ -257,11 +261,15 @@ class ActivityRemote(RemoteInputSelectAccessory):
             {ATTR_KEY_NAME: key_name, ATTR_ENTITY_ID: self.entity_id},
         )
 
+    def _call_service(self, service: str, params: dict[str, Any] | None = None) -> None:
+        """Call a service with the provided parameters."""
+        params = params or {ATTR_ENTITY_ID: self.entity_id}
+        self.async_call_service(REMOTE_DOMAIN, service, params)
+
     @callback
     def async_update_state(self, new_state: State) -> None:
-        """Update Television remote state after state changed."""
+        """Update the remote's state after a state change."""
         current_state = new_state.state
-        # Power state remote
         hk_state = 1 if current_state == STATE_ON else 0
         _LOGGER.debug("%s: Set current active state to %s", self.entity_id, hk_state)
         self.char_active.set_value(hk_state)

@@ -28,11 +28,13 @@ def async_describe_events(
         entity_id = data.get(ATTR_ENTITY_ID)
         value = data.get(ATTR_VALUE)
 
-        value_msg = f" to {value}" if value else ""
+        # Refactored message construction to inline the conditional formatting for 'value'.
+        # The 'to' string is only added if 'value' exists, and str(value) ensures it's properly formatted.
+        # `.strip()` removes any trailing spaces when 'value' is not present, ensuring consistent message formatting.
         message = (
-            f"send command {data[ATTR_SERVICE]}{value_msg} for"
-            f" {data[ATTR_DISPLAY_NAME]}"
-        )
+            f"send command {data[ATTR_SERVICE]}{' to ' + str(value) if value else ''} "
+            f"for {data[ATTR_DISPLAY_NAME]}"
+        ).strip()
 
         return {
             LOGBOOK_ENTRY_NAME: "HomeKit",

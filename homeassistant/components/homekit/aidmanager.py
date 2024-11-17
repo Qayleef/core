@@ -60,11 +60,7 @@ def _generate_aids(unique_id: str | None, entity_id: str) -> Generator[int]:
 
 
 class AccessoryAidStorage:
-    """Holds a map of entity ID to HomeKit ID.
-
-    Will generate new ID's, ensure they are unique and store them to make sure they
-    persist over reboots.
-    """
+    """Holds a map of entity ID to HomeKit ID."""
 
     def __init__(self, hass: HomeAssistant, entry_id: str) -> None:
         """Create a new entity map store."""
@@ -80,16 +76,16 @@ class AccessoryAidStorage:
         aidstore = get_aid_storage_filename_for_entry_id(self._entry_id)
         self.store = Store(self.hass, AID_MANAGER_STORAGE_VERSION, aidstore)
 
-        if not (raw_storage := await self.store.async_load()):
-            # There is no data about aid allocations yet
-            return
-        assert isinstance(raw_storage, dict)
-        self.allocations = raw_storage.get(ALLOCATIONS_KEY, {})
-        self.allocated_aids = set(self.allocations.values())
+        raw_storage = await self.store.async_load()
+        if raw_storage:
+            assert isinstance(raw_storage, dict)
+            self.allocations = raw_storage.get(ALLOCATIONS_KEY, {})
+            self.allocated_aids = set(self.allocations.values())
 
     def get_or_allocate_aid_for_entity_id(self, entity_id: str) -> int:
         """Generate a stable aid for an entity id."""
-        if not (entry := self._entity_registry.async_get(entity_id)):
+        entry = self._entity_registry.async_get(entity_id)
+        if not entry:
             return self.get_or_allocate_aid(None, entity_id)
 
         sys_unique_id = get_system_unique_id(entry, entry.unique_id)
@@ -100,10 +96,10 @@ class AccessoryAidStorage:
         self, sys_unique_id: str, entry: er.RegistryEntry
     ) -> None:
         """Migrate the unique id aid assignment if its changed."""
-        if sys_unique_id in self.allocations or not (
-            previous_unique_id := entry.previous_unique_id
-        ):
+        previous_unique_id = entry.previous_unique_id
+        if not previous_unique_id or sys_unique_id in self.allocations:
             return
+
         old_sys_unique_id = get_system_unique_id(entry, previous_unique_id)
         if aid := self.allocations.pop(old_sys_unique_id, None):
             self.allocations[sys_unique_id] = aid
@@ -111,21 +107,19 @@ class AccessoryAidStorage:
 
     def get_or_allocate_aid(self, unique_id: str | None, entity_id: str) -> int:
         """Allocate (and return) a new aid for an accessory."""
-        if unique_id and unique_id in self.allocations:
-            return self.allocations[unique_id]
-        if entity_id in self.allocations:
-            return self.allocations[entity_id]
+        storage_key = unique_id or entity_id
+
+        if storage_key in self.allocations:
+            return self.allocations[storage_key]
 
         for aid in _generate_aids(unique_id, entity_id):
-            if aid in INVALID_AIDS:
+            if aid in INVALID_AIDS or aid in self.allocated_aids:
                 continue
-            if aid not in self.allocated_aids:
-                # Prefer the unique_id over the entitiy_id
-                storage_key = unique_id or entity_id
-                self.allocations[storage_key] = aid
-                self.allocated_aids.add(aid)
-                self.async_schedule_save()
-                return aid
+
+            self.allocations[storage_key] = aid
+            self.allocated_aids.add(aid)
+            self.async_schedule_save()
+            return aid
 
         raise ValueError(
             f"Unable to generate unique aid allocation for {entity_id} [{unique_id}]"
@@ -133,12 +127,10 @@ class AccessoryAidStorage:
 
     def delete_aid(self, storage_key: str) -> None:
         """Delete an aid allocation."""
-        if storage_key not in self.allocations:
-            return
-
-        aid = self.allocations.pop(storage_key)
-        self.allocated_aids.discard(aid)
-        self.async_schedule_save()
+        aid = self.allocations.pop(storage_key, None)
+        if aid:
+            self.allocated_aids.discard(aid)
+            self.async_schedule_save()
 
     @callback
     def async_schedule_save(self) -> None:
