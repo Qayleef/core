@@ -37,7 +37,7 @@ async def test_setup_platform(
             "is_failed": True,
             "display_code": None,
             "fault_code": FaultCode.CV_TEMPERATURE_TOO_HIGH_E1,
-        }, 
+        },
         MOCK_HEATER_STATUS
         | {
             "is_failed": True,

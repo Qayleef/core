@@ -159,6 +159,7 @@ async def test_form_validation(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert "errors" not in result
 
+
 async def test_invalid_host(hass: HomeAssistant, mock_incomfort: MagicMock) -> None:
     """Test handling of an invalid host in the configuration."""
     result = await hass.config_entries.flow.async_init(
@@ -185,4 +186,3 @@ async def test_invalid_host(hass: HomeAssistant, mock_incomfort: MagicMock) -> N
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Intergas InComfort/Intouch Lan2RF gateway"
     assert result["data"] == MOCK_CONFIG
-

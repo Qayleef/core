@@ -26,14 +26,14 @@ from tests.common import snapshot_platform
         {"room_temp": None, "setpoint": 18.0, "override": None},
     ],
     ids=[
-        "new_thermostat", 
-         "legacy_thermostat",
-         "low_temp",
+        "new_thermostat",
+        "legacy_thermostat",
+        "low_temp",
         "high_temp",
         "override_high",
         "override_low",
         "missing_setpoint",
-        "missing_temp_and_override"
+        "missing_temp_and_override",
     ],
 )
 async def test_setup_platform(
@@ -50,6 +50,7 @@ async def test_setup_platform(
     """
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await snapshot_platform(hass, entity_registry, snapshot, mock_config_entry.entry_id)
+
 
 @patch("homeassistant.components.incomfort.PLATFORMS", [Platform.CLIMATE])
 async def test_additional_climate_conditions(
