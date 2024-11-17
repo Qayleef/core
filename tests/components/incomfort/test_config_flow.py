@@ -159,9 +159,7 @@ async def test_form_validation(
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert "errors" not in result
 
-async def test_invalid_host(
-    hass: HomeAssistant, mock_incomfort: MagicMock
-) -> None:
+async def test_invalid_host(hass: HomeAssistant, mock_incomfort: MagicMock) -> None:
     """Test handling of an invalid host in the configuration."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
