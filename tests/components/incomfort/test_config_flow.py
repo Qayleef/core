@@ -20,8 +20,6 @@ from tests.common import MockConfigEntry
 class CannotConnect(Exception):
     """Raised when a connection cannot be established."""
 
-    pass
-
 
 async def test_form(
     hass: HomeAssistant, mock_setup_entry: AsyncMock, mock_incomfort: MagicMock
