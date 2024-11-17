@@ -42,7 +42,7 @@ async def test_setup_platform(
         | {
             "is_failed": True,
             "display_code": None,
-            "fault_code": FaultCode.WATER_PRESSURE_TOO_LOW_E2,
+            "fault_code": FaultCode.POOR_FLAME_SIGNAL_E5,
         },
         MOCK_HEATER_STATUS
         | {

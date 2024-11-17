@@ -17,6 +17,12 @@ from .conftest import MOCK_CONFIG
 from tests.common import MockConfigEntry
 
 
+class CannotConnect(Exception):
+    """Raised when a connection cannot be established."""
+
+    pass
+
+
 async def test_form(
     hass: HomeAssistant, mock_setup_entry: AsyncMock, mock_incomfort: MagicMock
 ) -> None:
@@ -168,6 +174,7 @@ async def test_invalid_host(hass: HomeAssistant, mock_incomfort: MagicMock) -> N
     # Simulate invalid host
     invalid_config = MOCK_CONFIG.copy()
     invalid_config[CONF_HOST] = "invalid-host"
+    mock_incomfort.validate_host = AsyncMock(side_effect=CannotConnect)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], invalid_config
     )
@@ -177,6 +184,7 @@ async def test_invalid_host(hass: HomeAssistant, mock_incomfort: MagicMock) -> N
 
     # Retry with valid host
     valid_config = MOCK_CONFIG
+    mock_incomfort.validate_host = AsyncMock(return_value=True)
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], valid_config
     )
