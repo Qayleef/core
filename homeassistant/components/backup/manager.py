@@ -71,43 +71,6 @@ class BaseBackupManager(abc.ABC):
         LOGGER.error("Backup not found for slug: %s", slug)
         raise HomeAssistantError(f"Backup {slug} not found")
 
-    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
-        """Restore a backup with enhanced error handling and logging."""
-        try:
-            LOGGER.info("Starting restore process for backup slug: %s", slug)
-
-            if (backup := await self.async_get_backup(slug=slug)) is None:
-                self._raise_backup_not_found(slug)  # Call the helper method
-
-            LOGGER.debug("Backup metadata: %s", backup.as_dict())
-
-            def _write_restore_file() -> None:
-                """Write the restore metadata file."""
-                LOGGER.debug("Writing restore metadata for backup: %s", slug)
-                Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
-                    json.dumps({"path": backup.path.as_posix()}),
-                    encoding="utf-8",
-                )
-
-            await self.hass.async_add_executor_job(_write_restore_file)
-            LOGGER.info("Restore metadata written successfully.")
-
-            await self.hass.services.async_call("homeassistant", "restart", {})
-            LOGGER.info(
-                "Restore process completed successfully for backup slug: %s", slug
-            )
-
-        except Exception as exc:
-            LOGGER.error(
-                "Restore process failed for backup slug: %s. Error: %s: %s",
-                slug,
-                type(exc).__name__,
-                str(exc),
-            )
-            raise HomeAssistantError(
-                f"An error occurred during the restore process for {slug}"
-            ) from exc
-
     @callback
     def _add_platform(
         self,
@@ -175,8 +138,52 @@ class BaseBackupManager(abc.ABC):
         self.loaded_platforms = True
 
     @abc.abstractmethod
-    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:  # noqa: F811
-        """Restore a backup."""
+    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
+        """Restore a backup with enhanced error handling and logging."""
+        try:
+            LOGGER.info("Starting restore process for backup slug: %s", slug)
+
+            # Fetch the backup
+            backup = await self.async_get_backup(slug=slug)
+            if backup is None or not backup.path.exists():
+                self._raise_backup_not_found(
+                    slug
+                )  # Call the helper method if backup is invalid
+
+            # Use type assertion to inform the type checker that backup is not None
+            assert backup is not None
+
+            # Log backup metadata (safe since backup is validated)
+            LOGGER.debug("Backup metadata: %s", backup.as_dict())
+
+            # Define the function to write restore metadata
+            def _write_restore_file() -> None:
+                """Write the restore metadata file."""
+                LOGGER.debug("Writing restore metadata for backup: %s", slug)
+                Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
+                    json.dumps({"path": backup.path.as_posix()}),
+                    encoding="utf-8",
+                )
+
+            # Perform file-writing and restart the system
+            await self.hass.async_add_executor_job(_write_restore_file)
+            LOGGER.info("Restore metadata written successfully")
+
+            await self.hass.services.async_call("homeassistant", "restart", {})
+            LOGGER.info(
+                "Restore process completed successfully for backup slug: %s", slug
+            )
+
+        except Exception as exc:
+            LOGGER.error(
+                "Restore process failed for backup slug: %s. Error: %s: %s",
+                slug,
+                type(exc).__name__,
+                str(exc),
+            )
+            raise HomeAssistantError(
+                f"An error occurred during the restore process for {slug}"
+            ) from exc
 
     @abc.abstractmethod
     async def async_create_backup(self, **kwargs: Any) -> Backup:
@@ -240,34 +247,22 @@ class BackupManager(BaseBackupManager):
                     "Missing metadata key in backup file %s: %s", backup_path, err
                 )
 
-        LOGGER.info("Read %d valid backups from disk.", len(backups))
+        LOGGER.info("Read %d valid backups from disk", len(backups))
         return backups
-
-    async def async_get_backups(self, **kwargs: Any) -> dict[str, Backup]:
-        """Return backups."""
-        if not self.loaded_backups:
-            await self.load_backups()
-
-        return self.backups
 
     async def async_get_backup(self, *, slug: str, **kwargs: Any) -> Backup | None:
         """Return a backup."""
         if not self.loaded_backups:
             await self.load_backups()
 
-        if not (backup := self.backups.get(slug)):
-            return None
-
-        if not backup.path.exists():
+        backup = self.backups.get(slug)
+        if backup is None or not backup.path.exists():
             LOGGER.debug(
-                (
-                    "Removing tracked backup (%s) that does not exists on the expected"
-                    " path %s"
-                ),
-                backup.slug,
-                backup.path,
+                "Removing tracked backup (%s) that does not exist on the expected path %s",
+                slug,
+                backup.path if backup else "Unknown",
             )
-            self.backups.pop(slug)
+            self.backups.pop(slug, None)
             return None
 
         return backup
@@ -327,7 +322,10 @@ class BackupManager(BaseBackupManager):
             )
 
             self.backups[slug] = backup
-            LOGGER.info("Backup process completed successfully: %s", backup.as_dict())
+            if backup is not None:
+                LOGGER.info(
+                    "Backup process completed successfully: %s", backup.as_dict()
+                )
 
         except Exception as exc:
             LOGGER.error(
@@ -375,44 +373,6 @@ class BackupManager(BaseBackupManager):
                 )
 
         return tar_file_path.stat().st_size
-
-    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
-        """Restore a backup with enhanced error handling and logging."""
-        try:
-            LOGGER.info("Starting restore process for backup slug: %s", slug)
-
-            if (backup := await self.async_get_backup(slug=slug)) is None:
-                LOGGER.error("Backup not found for slug: %s", slug)
-                raise HomeAssistantError(f"Backup {slug} not found")  # noqa: TRY301
-
-            LOGGER.debug("Backup metadata: %s", backup.as_dict())
-
-            def _write_restore_file() -> None:
-                """Write the restore metadata file."""
-                LOGGER.debug("Writing restore metadata for backup: %s", slug)
-                Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
-                    json.dumps({"path": backup.path.as_posix()}),
-                    encoding="utf-8",
-                )
-
-            await self.hass.async_add_executor_job(_write_restore_file)
-            LOGGER.info("Restore metadata written successfully.")
-
-            await self.hass.services.async_call("homeassistant", "restart", {})
-            LOGGER.info(
-                "Restore process completed successfully for backup slug: %s", slug
-            )
-
-        except Exception as exc:
-            LOGGER.error(
-                "Restore process failed for backup slug: %s. Error: %s: %s",
-                slug,
-                type(exc).__name__,
-                str(exc),
-            )
-            raise HomeAssistantError(
-                f"An error occurred during the restore process for {slug}"
-            ) from exc
 
 
 def _generate_slug(date: str, name: str) -> str:
