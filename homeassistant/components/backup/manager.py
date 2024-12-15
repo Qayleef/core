@@ -139,51 +139,7 @@ class BaseBackupManager(abc.ABC):
 
     @abc.abstractmethod
     async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
-        """Restore a backup with enhanced error handling and logging."""
-        try:
-            LOGGER.info("Starting restore process for backup slug: %s", slug)
-
-            # Fetch the backup
-            backup = await self.async_get_backup(slug=slug)
-            if backup is None or not backup.path.exists():
-                self._raise_backup_not_found(
-                    slug
-                )  # Call the helper method if backup is invalid
-
-            # Use type assertion to inform the type checker that backup is not None
-            assert backup is not None
-
-            # Log backup metadata (safe since backup is validated)
-            LOGGER.debug("Backup metadata: %s", backup.as_dict())
-
-            # Define the function to write restore metadata
-            def _write_restore_file() -> None:
-                """Write the restore metadata file."""
-                LOGGER.debug("Writing restore metadata for backup: %s", slug)
-                Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
-                    json.dumps({"path": backup.path.as_posix()}),
-                    encoding="utf-8",
-                )
-
-            # Perform file-writing and restart the system
-            await self.hass.async_add_executor_job(_write_restore_file)
-            LOGGER.info("Restore metadata written successfully")
-
-            await self.hass.services.async_call("homeassistant", "restart", {})
-            LOGGER.info(
-                "Restore process completed successfully for backup slug: %s", slug
-            )
-
-        except Exception as exc:
-            LOGGER.error(
-                "Restore process failed for backup slug: %s. Error: %s: %s",
-                slug,
-                type(exc).__name__,
-                str(exc),
-            )
-            raise HomeAssistantError(
-                f"An error occurred during the restore process for {slug}"
-            ) from exc
+        """Restore a backup."""
 
     @abc.abstractmethod
     async def async_create_backup(self, **kwargs: Any) -> Backup:
@@ -223,11 +179,33 @@ class BackupManager(BaseBackupManager):
     async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
         """Restore a backup."""
         try:
+            LOGGER.info("Starting restore process for backup slug: %s", slug)
+
+            # Fetch the backup
             backup = await self.async_get_backup(slug=slug)
             if backup is None or not backup.path.exists():
                 self._raise_backup_not_found(slug)
-            # Perform restore logic
+
+            # Write the restore metadata
+            LOGGER.debug("Writing restore metadata for backup: %s", slug)
+            Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
+                json.dumps({"path": backup.path.as_posix()}),
+                encoding="utf-8",
+            )
+
+            # Trigger Home Assistant restart
+            await self.hass.services.async_call("homeassistant", "restart", {})
+            LOGGER.info(
+                "Restore process completed successfully for backup slug: %s", slug
+            )
+
         except Exception as exc:
+            LOGGER.error(
+                "Restore process failed for backup slug: %s. Error: %s: %s",
+                slug,
+                type(exc).__name__,
+                str(exc),
+            )
             raise HomeAssistantError(f"Failed to restore backup: {exc}") from exc
 
     async def load_backups(self) -> None:
