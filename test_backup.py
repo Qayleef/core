@@ -1,23 +1,26 @@
-"""
-Test script for validating backup functionality in the Backup Component.
+"""Test script for validating backup functionality in the Backup Component.
 
 Includes testing for both full and incremental backups.
 """
 
 import asyncio
 import logging
+
 from homeassistant.components.backup.manager import BackupManager
 from homeassistant.core import HomeAssistant
 
 logger = logging.getLogger(__name__)
+
 
 async def init_homeassistant():
     """Initialize the HomeAssistant instance and return the BackupManager.
 
     Returns:
         BackupManager: The initialized backup manager.
+
     """
     return BackupManager(HomeAssistant("/workspaces/core/config"))
+
 
 async def create_full_backup(manager):
     """Create a full backup using the BackupManager.
@@ -27,8 +30,10 @@ async def create_full_backup(manager):
 
     Returns:
         Backup: The created backup object.
+
     """
     return await manager.async_create_backup()
+
 
 # Event loop setup
 loop = asyncio.new_event_loop()
