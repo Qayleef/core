@@ -183,12 +183,23 @@ class BackupManager(BaseBackupManager):
 
             # Fetch the backup
             backup = await self.async_get_backup(slug=slug)
-            if backup is None or not backup.path.exists():
+
+            # Explicitly check for None
+            if backup is None:
+                self._raise_backup_not_found(slug)
+
+            # At this point, mypy knows backup is not None
+            assert (
+                backup is not None
+            )  # For additional type safety (helps static checkers)
+
+            # Ensure the backup path exists
+            if not backup.path.exists():
                 self._raise_backup_not_found(slug)
 
             # Write the restore metadata
-            LOGGER.debug("Writing restore metadata for backup: %s", slug)
-            Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
+            restore_file = Path(self.hass.config.path(RESTORE_BACKUP_FILE))
+            restore_file.write_text(
                 json.dumps({"path": backup.path.as_posix()}),
                 encoding="utf-8",
             )
