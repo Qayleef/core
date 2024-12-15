@@ -364,9 +364,7 @@ async def test_async_trigger_restore(
 
     with (
         patch("pathlib.Path.exists", return_value=True),  # Backup exists
-        patch(
-            "pathlib.Path.write_text", MagicMock()
-        ) as mocked_write_text,  # Mock write_text
+        patch("pathlib.Path.write_text") as mocked_write_text,  # Mock write_text
         patch(
             "homeassistant.core.ServiceRegistry.async_call"
         ) as mocked_service_call,  # Mock service call
@@ -374,16 +372,19 @@ async def test_async_trigger_restore(
         # Call the method under test
         await manager.async_restore_backup(TEST_BACKUP.slug)
 
-        # Validate `Path.write_text` is called with the correct arguments
+        # Debugging assertion
+        assert mocked_write_text.called, "write_text was not called!"
+
+        # Assert that the metadata file was written with the correct content
         mocked_write_text.assert_called_once_with(
             json.dumps({"path": backup_path.as_posix()}),
             encoding="utf-8",
         )
 
-        # Validate the restart service call
+        # Assert the restart service was called
         mocked_service_call.assert_called_once_with("homeassistant", "restart", {})
 
-        # Validate logs
+        # Assert log messages
         assert "Restore process completed successfully" in caplog.text
 
 
@@ -394,6 +395,6 @@ async def test_async_trigger_restore_missing_backup(hass: HomeAssistant) -> None
 
     with pytest.raises(
         HomeAssistantError,
-        match="An error occurred during the restore process for abc123",
+        match="Failed to restore backup: Backup abc123 not found",
     ):
         await manager.async_restore_backup(TEST_BACKUP.slug)
