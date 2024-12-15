@@ -253,7 +253,7 @@ class BackupManager(BaseBackupManager):
 
             if not last_full_backup:
                 backup_name = f"Full Backup {HAVERSION}"
-                LOGGER.info("No full backup found. Creating a full backup.")
+                LOGGER.info("No full backup found. Creating a full backup")
             else:
                 backup_name = f"Incremental Backup {HAVERSION}"
                 LOGGER.info(
