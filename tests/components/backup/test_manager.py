@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -169,7 +170,7 @@ async def test_getting_backup_that_does_not_exist(
 
         assert (
             f"Removing tracked backup ({TEST_BACKUP.slug}) that "
-            f"does not exists on the expected path {TEST_BACKUP.path}"
+            f"does not exist on the expected path {TEST_BACKUP.path}"
         ) in caplog.text
 
 
@@ -358,15 +359,28 @@ async def test_async_trigger_restore(
     manager.loaded_backups = True
     manager.backups = {TEST_BACKUP.slug: TEST_BACKUP}
 
+    # Mock the backup path
+    backup_path = TEST_BACKUP.path
+
     with (
         patch("pathlib.Path.exists", return_value=True),
         patch("pathlib.Path.write_text") as mocked_write_text,
         patch("homeassistant.core.ServiceRegistry.async_call") as mocked_service_call,
     ):
+        # Call the method under test
         await manager.async_restore_backup(TEST_BACKUP.slug)
-        assert mocked_write_text.called
-        assert mocked_write_text.call_args[0][0] == '{"path": "abc123.tar"}'
-        assert mocked_service_call.called
+
+        # Assert that the metadata file was written with the correct content
+        mocked_write_text.assert_called_once_with(
+            json.dumps({"path": backup_path.as_posix()}),
+            encoding="utf-8",
+        )
+
+        # Assert that the restart service was called
+        mocked_service_call.assert_called_once_with("homeassistant", "restart", {})
+
+        # Validate log messages
+        assert "Restore metadata written successfully" in caplog.text
 
 
 async def test_async_trigger_restore_missing_backup(hass: HomeAssistant) -> None:
