@@ -55,10 +55,12 @@ from .const import API_TEMPERATURE_STEP, TEMP_UNIT_LIB_TO_HASS
 from .coordinator import AirzoneUpdateCoordinator
 from .entity import AirzoneZoneEntity
 
+# Mapping fan speed integers to Home Assistant fan modes
 BASE_FAN_SPEEDS: Final[dict[int, str]] = {
     0: FAN_AUTO,
     1: FAN_LOW,
 }
+# Extended fan speed mappings for systems with 2 or 3 speeds
 FAN_SPEED_MAPS: Final[dict[int, dict[int, str]]] = {
     2: BASE_FAN_SPEEDS
     | {
@@ -70,7 +72,7 @@ FAN_SPEED_MAPS: Final[dict[int, dict[int, str]]] = {
         3: FAN_HIGH,
     },
 }
-
+# Mapping operation actions from library to Home Assistant actions
 HVAC_ACTION_LIB_TO_HASS: Final[dict[OperationAction, HVACAction]] = {
     OperationAction.COOLING: HVACAction.COOLING,
     OperationAction.DRYING: HVACAction.DRYING,
@@ -79,6 +81,7 @@ HVAC_ACTION_LIB_TO_HASS: Final[dict[OperationAction, HVACAction]] = {
     OperationAction.IDLE: HVACAction.IDLE,
     OperationAction.OFF: HVACAction.OFF,
 }
+# Mapping operation modes from library to Home Assistant modes
 HVAC_MODE_LIB_TO_HASS: Final[dict[OperationMode, HVACMode]] = {
     OperationMode.STOP: HVACMode.OFF,
     OperationMode.COOLING: HVACMode.COOL,
@@ -88,6 +91,7 @@ HVAC_MODE_LIB_TO_HASS: Final[dict[OperationMode, HVACMode]] = {
     OperationMode.AUX_HEATING: HVACMode.HEAT,
     OperationMode.AUTO: HVACMode.HEAT_COOL,
 }
+# Mapping operation modes from Home Assistant to library modes
 HVAC_MODE_HASS_TO_LIB: Final[dict[HVACMode, OperationMode]] = {
     HVACMode.OFF: OperationMode.STOP,
     HVACMode.COOL: OperationMode.COOLING,
@@ -98,6 +102,7 @@ HVAC_MODE_HASS_TO_LIB: Final[dict[HVACMode, OperationMode]] = {
 }
 
 
+# Async setup function for Airzone climate integration
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AirzoneConfigEntry,
@@ -108,6 +113,7 @@ async def async_setup_entry(
 
     added_zones: set[str] = set()
 
+    # Add new zones to Home Assistant
     def _async_entity_listener() -> None:
         """Handle additions of climate."""
 
@@ -130,6 +136,7 @@ async def async_setup_entry(
     _async_entity_listener()
 
 
+# Airzone climate entity class
 class AirzoneClimate(AirzoneZoneEntity, ClimateEntity):
     """Define an Airzone sensor."""
 
@@ -162,11 +169,13 @@ class AirzoneClimate(AirzoneZoneEntity, ClimateEntity):
             HVAC_MODE_LIB_TO_HASS[mode] for mode in self.get_airzone_value(AZD_MODES)
         ]
         self._attr_hvac_modes = list(dict.fromkeys(_attr_hvac_modes))
+        # Setup fan speeds if available
         if (
             self.get_airzone_value(AZD_SPEED) is not None
             and self.get_airzone_value(AZD_SPEEDS) is not None
         ):
             self._set_fan_speeds()
+        # Enable temperature range control if double set points are available
         if self.get_airzone_value(AZD_DOUBLE_SET_POINT):
             self._attr_supported_features |= (
                 ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
