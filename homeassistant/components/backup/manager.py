@@ -66,6 +66,48 @@ class BaseBackupManager(abc.ABC):
         self.loaded_platforms = False
         self.platforms: dict[str, BackupPlatformProtocol] = {}
 
+    def _raise_backup_not_found(self, slug: str) -> None:
+        """Raise a HomeAssistantError for a missing backup."""
+        LOGGER.error("Backup not found for slug: %s", slug)
+        raise HomeAssistantError(f"Backup {slug} not found")
+
+    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
+        """Restore a backup with enhanced error handling and logging."""
+        try:
+            LOGGER.info("Starting restore process for backup slug: %s", slug)
+
+            if (backup := await self.async_get_backup(slug=slug)) is None:
+                self._raise_backup_not_found(slug)  # Call the helper method
+
+            LOGGER.debug("Backup metadata: %s", backup.as_dict())
+
+            def _write_restore_file() -> None:
+                """Write the restore metadata file."""
+                LOGGER.debug("Writing restore metadata for backup: %s", slug)
+                Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
+                    json.dumps({"path": backup.path.as_posix()}),
+                    encoding="utf-8",
+                )
+
+            await self.hass.async_add_executor_job(_write_restore_file)
+            LOGGER.info("Restore metadata written successfully.")
+
+            await self.hass.services.async_call("homeassistant", "restart", {})
+            LOGGER.info(
+                "Restore process completed successfully for backup slug: %s", slug
+            )
+
+        except Exception as exc:
+            LOGGER.error(
+                "Restore process failed for backup slug: %s. Error: %s: %s",
+                slug,
+                type(exc).__name__,
+                str(exc),
+            )
+            raise HomeAssistantError(
+                f"An error occurred during the restore process for {slug}"
+            ) from exc
+
     @callback
     def _add_platform(
         self,
@@ -110,11 +152,19 @@ class BaseBackupManager(abc.ABC):
                 platform.async_post_backup(self.hass)
                 for platform in self.platforms.values()
             ),
-            return_exceptions=True,
+            return_exceptions=True,  # Ensure exceptions are captured
         )
-        for result in post_backup_results:
+
+        for result, platform in zip(
+            post_backup_results, self.platforms.keys(), strict=False
+        ):
             if isinstance(result, Exception):
-                raise result
+                LOGGER.error(
+                    "Error occurred in post_backup for %s: %s",
+                    platform,
+                    result,
+                )
+                raise result  # Propagate the exception
 
     async def load_platforms(self) -> None:
         """Load backup platforms."""
@@ -125,7 +175,7 @@ class BaseBackupManager(abc.ABC):
         self.loaded_platforms = True
 
     @abc.abstractmethod
-    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
+    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:  # noqa: F811
         """Restore a backup."""
 
     @abc.abstractmethod
@@ -165,10 +215,11 @@ class BackupManager(BaseBackupManager):
         self.loaded_backups = True
 
     def _read_backups(self) -> dict[str, Backup]:
-        """Read backups from disk."""
+        """Read backups from disk with enhanced error handling."""
         backups: dict[str, Backup] = {}
         for backup_path in self.backup_dir.glob("*.tar"):
             try:
+                LOGGER.debug("Processing backup file: %s", backup_path)
                 with tarfile.open(backup_path, "r:", bufsize=BUF_SIZE) as backup_file:
                     if data_file := backup_file.extractfile("./backup.json"):
                         data = json_loads_object(data_file.read())
@@ -180,8 +231,16 @@ class BackupManager(BaseBackupManager):
                             size=round(backup_path.stat().st_size / 1_048_576, 2),
                         )
                         backups[backup.slug] = backup
-            except (OSError, TarError, json.JSONDecodeError, KeyError) as err:
-                LOGGER.warning("Unable to read backup %s: %s", backup_path, err)
+            except (OSError, TarError) as err:
+                LOGGER.error("Failed to process backup file %s: %s", backup_path, err)
+            except json.JSONDecodeError as err:
+                LOGGER.error("Failed to parse JSON in %s: %s", backup_path, err)
+            except KeyError as err:
+                LOGGER.error(
+                    "Missing metadata key in backup file %s: %s", backup_path, err
+                )
+
+        LOGGER.info("Read %d valid backups from disk.", len(backups))
         return backups
 
     async def async_get_backups(self, **kwargs: Any) -> dict[str, Backup]:
@@ -223,46 +282,67 @@ class BackupManager(BaseBackupManager):
         self.backups.pop(slug)
 
     async def async_create_backup(self, **kwargs: Any) -> Backup:
-        """Generate a backup."""
+        """Generate a backup with enhanced error handling and logging."""
         if self.backing_up:
+            LOGGER.error("Backup process already in progress, aborting request")
             raise HomeAssistantError("Backup already in progress")
 
         try:
             self.backing_up = True
+            LOGGER.info("Starting the backup process")
+
             await self.async_pre_backup_actions()
-            backup_name = f"Core {HAVERSION}"
+
             date_str = dt_util.now().isoformat()
+            LOGGER.debug("Backup timestamp: %s", date_str)
+
+            backup_name = f"Backup {HAVERSION}"
             slug = _generate_slug(date_str, backup_name)
+            LOGGER.debug("Generated backup slug: %s", slug)
 
             backup_data = {
                 "slug": slug,
                 "name": backup_name,
                 "date": date_str,
-                "type": "partial",
                 "folders": ["homeassistant"],
                 "homeassistant": {"version": HAVERSION},
                 "compressed": True,
             }
+
             tar_file_path = Path(self.backup_dir, f"{backup_data['slug']}.tar")
+            LOGGER.debug("Backup file path: %s", tar_file_path)
+
             size_in_bytes = await self.hass.async_add_executor_job(
                 self._mkdir_and_generate_backup_contents,
                 tar_file_path,
                 backup_data,
             )
+
             backup = Backup(
                 slug=slug,
                 name=backup_name,
                 date=date_str,
                 path=tar_file_path,
-                size=round(size_in_bytes / 1_048_576, 2),
+                size=round(size_in_bytes / 1_048_576, 2),  # Convert bytes to MB
             )
-            if self.loaded_backups:
-                self.backups[slug] = backup
-            LOGGER.debug("Generated new backup with slug %s", slug)
+
+            self.backups[slug] = backup
+            LOGGER.info("Backup process completed successfully: %s", backup.as_dict())
+
+        except Exception as exc:
+            LOGGER.error(
+                "Backup process failed. Error: %s: %s",
+                type(exc).__name__,
+                str(exc),
+            )
+            raise HomeAssistantError("Backup process encountered an error.") from exc
+
+        else:  # Move the return statement to an else block
             return backup
+
         finally:
             self.backing_up = False
-            await self.async_post_backup_actions()
+            LOGGER.info("Backup process state reset")
 
     def _mkdir_and_generate_backup_contents(
         self,
@@ -297,23 +377,42 @@ class BackupManager(BaseBackupManager):
         return tar_file_path.stat().st_size
 
     async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
-        """Restore a backup.
+        """Restore a backup with enhanced error handling and logging."""
+        try:
+            LOGGER.info("Starting restore process for backup slug: %s", slug)
 
-        This will write the restore information to .HA_RESTORE which
-        will be handled during startup by the restore_backup module.
-        """
-        if (backup := await self.async_get_backup(slug=slug)) is None:
-            raise HomeAssistantError(f"Backup {slug} not found")
+            if (backup := await self.async_get_backup(slug=slug)) is None:
+                LOGGER.error("Backup not found for slug: %s", slug)
+                raise HomeAssistantError(f"Backup {slug} not found")  # noqa: TRY301
 
-        def _write_restore_file() -> None:
-            """Write the restore file."""
-            Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
-                json.dumps({"path": backup.path.as_posix()}),
-                encoding="utf-8",
+            LOGGER.debug("Backup metadata: %s", backup.as_dict())
+
+            def _write_restore_file() -> None:
+                """Write the restore metadata file."""
+                LOGGER.debug("Writing restore metadata for backup: %s", slug)
+                Path(self.hass.config.path(RESTORE_BACKUP_FILE)).write_text(
+                    json.dumps({"path": backup.path.as_posix()}),
+                    encoding="utf-8",
+                )
+
+            await self.hass.async_add_executor_job(_write_restore_file)
+            LOGGER.info("Restore metadata written successfully.")
+
+            await self.hass.services.async_call("homeassistant", "restart", {})
+            LOGGER.info(
+                "Restore process completed successfully for backup slug: %s", slug
             )
 
-        await self.hass.async_add_executor_job(_write_restore_file)
-        await self.hass.services.async_call("homeassistant", "restart", {})
+        except Exception as exc:
+            LOGGER.error(
+                "Restore process failed for backup slug: %s. Error: %s: %s",
+                slug,
+                type(exc).__name__,
+                str(exc),
+            )
+            raise HomeAssistantError(
+                f"An error occurred during the restore process for {slug}"
+            ) from exc
 
 
 def _generate_slug(date: str, name: str) -> str:
