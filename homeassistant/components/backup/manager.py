@@ -148,6 +148,16 @@ class BaseBackupManager(abc.ABC):
         """Remove a backup."""
 
 
+def _file_has_changed(current_file: Path, last_backup_file: Path) -> bool:
+    """Compare file checksums to detect changes."""
+    if not last_backup_file.exists():
+        return True  # If file does not exist in the last backup, it is new.
+
+    current_hash = hashlib.sha256(current_file.read_bytes()).hexdigest()
+    backup_hash = hashlib.sha256(last_backup_file.read_bytes()).hexdigest()
+    return current_hash != backup_hash
+
+
 class BackupManager(BaseBackupManager):
     """Backup manager for the Backup integration."""
 
@@ -156,6 +166,13 @@ class BackupManager(BaseBackupManager):
         super().__init__(hass=hass)
         self.backup_dir = Path(hass.config.path("backups"))
         self.loaded_backups = False
+
+    def _get_last_full_backup(self) -> Backup | None:
+        """Return the most recent full backup."""
+        for backup in sorted(self.backups.values(), key=lambda b: b.date, reverse=True):
+            if backup.name.startswith("Full Backup"):
+                return backup
+        return None
 
     async def load_backups(self) -> None:
         """Load data of stored backup files."""
@@ -230,8 +247,19 @@ class BackupManager(BaseBackupManager):
         try:
             self.backing_up = True
             await self.async_pre_backup_actions()
-            backup_name = f"Core {HAVERSION}"
+
             date_str = dt_util.now().isoformat()
+            last_full_backup = self._get_last_full_backup()
+
+            if not last_full_backup:
+                backup_name = f"Full Backup {HAVERSION}"
+                LOGGER.info("No full backup found. Creating a full backup")
+            else:
+                backup_name = f"Incremental Backup {HAVERSION}"
+                LOGGER.info(
+                    "Creating incremental backup based on %s", last_full_backup.name
+                )
+
             slug = _generate_slug(date_str, backup_name)
 
             backup_data = {
@@ -244,11 +272,29 @@ class BackupManager(BaseBackupManager):
                 "compressed": True,
             }
             tar_file_path = Path(self.backup_dir, f"{backup_data['slug']}.tar")
-            size_in_bytes = await self.hass.async_add_executor_job(
-                self._mkdir_and_generate_backup_contents,
-                tar_file_path,
-                backup_data,
-            )
+            # Determine if a full backup already exists
+            last_full_backup = None
+            for backup in self.backups.values():
+                if backup.name.startswith("Core") and backup.path.exists():
+                    last_full_backup = backup
+                    break
+
+            # Create full or incremental backup
+            if not last_full_backup:
+                # Create a full backup if no prior full backup exists
+                size_in_bytes = await self.hass.async_add_executor_job(
+                    self._mkdir_and_generate_backup_contents,
+                    tar_file_path,
+                    backup_data,
+                )
+            else:
+                # Create incremental backup
+                size_in_bytes = await self.hass.async_add_executor_job(
+                    self._create_incremental_backup_contents,
+                    tar_file_path,
+                    last_full_backup.path,
+                )
+
             backup = Backup(
                 slug=slug,
                 name=backup_name,
@@ -264,26 +310,77 @@ class BackupManager(BaseBackupManager):
             self.backing_up = False
             await self.async_post_backup_actions()
 
+    def _create_incremental_backup_contents(
+        self, tar_file_path: Path, last_full_backup_path: Path
+    ) -> int:
+        """Generate an incremental backup by comparing with the last full backup."""
+        LOGGER.info("Generating incremental backup at %s", tar_file_path)
+
+        backup_data = {
+            "slug": tar_file_path.stem,
+            "name": f"Incremental Backup {tar_file_path.stem}",
+            "date": dt_util.now().isoformat(),
+            "backup_type": "incremental",
+        }
+
+        # Track files from the last full backup
+        last_backup_files = list(Path(last_full_backup_path).parent.glob("**/*"))
+
+        with tarfile.open(tar_file_path, "w:gz") as tar:
+            # Add backup.json metadata first
+            raw_bytes = json_bytes(backup_data)
+            fileobj = io.BytesIO(raw_bytes)
+            tar_info = tarfile.TarInfo(name="backup.json")
+            tar_info.size = len(raw_bytes)
+            tar_info.mtime = int(time.time())
+            tar.addfile(tar_info, fileobj)
+
+            # Add only changed or new files
+            for file in Path(self.hass.config.path()).glob("**/*"):
+                if not file.is_file():
+                    continue
+
+                corresponding_file = next(
+                    (b for b in last_backup_files if b.name == file.name), None
+                )
+                if corresponding_file is None or _file_has_changed(
+                    file, corresponding_file
+                ):
+                    LOGGER.debug(
+                        "Adding updated/new file to incremental backup: %s", file
+                    )
+                    tar.add(file, arcname=file.relative_to(self.hass.config.path()))
+                else:
+                    LOGGER.debug("Skipping unchanged file: %s", file)
+
+        return tar_file_path.stat().st_size
+
     def _mkdir_and_generate_backup_contents(
         self,
         tar_file_path: Path,
         backup_data: dict[str, Any],
     ) -> int:
-        """Generate backup contents and return the size."""
+        """Generate full backup contents and return the size."""
         if not self.backup_dir.exists():
             LOGGER.debug("Creating backup directory")
             self.backup_dir.mkdir()
+
+        # Add backup_type metadata
+        backup_data["backup_type"] = "full"
 
         outer_secure_tarfile = SecureTarFile(
             tar_file_path, "w", gzip=False, bufsize=BUF_SIZE
         )
         with outer_secure_tarfile as outer_secure_tarfile_tarfile:
+            # Write the backup.json metadata
             raw_bytes = json_bytes(backup_data)
             fileobj = io.BytesIO(raw_bytes)
             tar_info = tarfile.TarInfo(name="./backup.json")
             tar_info.size = len(raw_bytes)
             tar_info.mtime = int(time.time())
             outer_secure_tarfile_tarfile.addfile(tar_info, fileobj=fileobj)
+
+            # Add the Home Assistant data directory to the backup
             with outer_secure_tarfile.create_inner_tar(
                 "./homeassistant.tar.gz", gzip=True
             ) as core_tar:
