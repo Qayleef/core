@@ -214,6 +214,22 @@ class BackupManager(BaseBackupManager):
         self.backup_dir = Path(hass.config.path("backups"))
         self.loaded_backups = False
 
+    async def async_get_backups(self, **kwargs: Any) -> dict[str, Backup]:
+        """Get backups."""
+        if not self.loaded_backups:
+            await self.load_backups()
+        return self.backups
+
+    async def async_restore_backup(self, slug: str, **kwargs: Any) -> None:
+        """Restore a backup."""
+        try:
+            backup = await self.async_get_backup(slug=slug)
+            if backup is None or not backup.path.exists():
+                self._raise_backup_not_found(slug)
+            # Perform restore logic
+        except Exception as exc:
+            raise HomeAssistantError(f"Failed to restore backup: {exc}") from exc
+
     async def load_backups(self) -> None:
         """Load data of stored backup files."""
         backups = await self.hass.async_add_executor_job(self._read_backups)
