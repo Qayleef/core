@@ -364,6 +364,7 @@ async def test_async_trigger_restore(
         patch("homeassistant.core.ServiceRegistry.async_call") as mocked_service_call,
     ):
         await manager.async_restore_backup(TEST_BACKUP.slug)
+        assert mocked_write_text.called
         assert mocked_write_text.call_args[0][0] == '{"path": "abc123.tar"}'
         assert mocked_service_call.called
 
@@ -375,6 +376,6 @@ async def test_async_trigger_restore_missing_backup(hass: HomeAssistant) -> None
 
     with pytest.raises(
         HomeAssistantError,
-        match="An error occurred during the restore process for abc123",
+        match="Failed to restore backup: Backup abc123 not found",
     ):
         await manager.async_restore_backup(TEST_BACKUP.slug)
