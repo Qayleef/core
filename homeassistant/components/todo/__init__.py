@@ -1,4 +1,4 @@
-"""The todo integration."""
+# The todo integration.  # noqa: D104
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 import dataclasses
 import datetime
 import logging
-from typing import Any, final
+from typing import Any, Final, final
 
 from propcache import cached_property
 import voluptuous as vol
@@ -47,10 +47,16 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-ENTITY_ID_FORMAT = DOMAIN + ".{}"
-PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA
-PLATFORM_SCHEMA_BASE = cv.PLATFORM_SCHEMA_BASE
-SCAN_INTERVAL = datetime.timedelta(seconds=60)
+# ENTITY_ID_FORMAT = DOMAIN + ".{}"
+# PLATFORM_SCHEMA = cv.PLATFORM_SCHEMA
+# PLATFORM_SCHEMA_BASE = cv.PLATFORM_SCHEMA_BASE
+# SCAN_INTERVAL = datetime.timedelta(seconds=60)
+
+# New: Update constants with Final
+ENTITY_ID_FORMAT: Final[str] = f"{DOMAIN}.{{}}"
+PLATFORM_SCHEMA: Final = cv.PLATFORM_SCHEMA
+PLATFORM_SCHEMA_BASE: Final = cv.PLATFORM_SCHEMA_BASE
+SCAN_INTERVAL: Final = datetime.timedelta(seconds=60)
 
 
 @dataclasses.dataclass
@@ -321,6 +327,49 @@ class TodoListEntity(Entity, cached_properties=CACHED_PROPERTIES_WITH_ATTR_):
         self.async_update_listeners()
 
 
+# @websocket_api.websocket_command(
+#     {
+#         vol.Required("type"): "todo/item/subscribe",
+#         vol.Required("entity_id"): cv.entity_domain(DOMAIN),
+#     }
+# )
+# @websocket_api.async_response
+# async def websocket_handle_subscribe_todo_items(
+#     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+# ) -> None:
+#     """Subscribe to To-do list item updates."""
+#     entity_id: str = msg["entity_id"]
+
+#     if not (entity := hass.data[DATA_COMPONENT].get_entity(entity_id)):
+#         connection.send_error(
+#             msg["id"],
+#             "invalid_entity_id",
+#             f"To-do list entity not found: {entity_id}",
+#         )
+#         return
+
+#     @callback
+#     def todo_item_listener(todo_items: list[JsonValueType] | None) -> None:
+#         """Push updated To-do list items to websocket."""
+#         connection.send_message(
+#             websocket_api.event_message(
+#                 msg["id"],
+#                 {
+#                     "items": todo_items,
+#                 },
+#             )
+#         )
+
+#     connection.subscriptions[msg["id"]] = entity.async_subscribe_updates(
+#         todo_item_listener
+#     )
+#     connection.send_result(msg["id"])
+
+#     # Push an initial forecast update
+#     entity.async_update_listeners()
+
+
+# New:Optimized WebSocket Command Handlers
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "todo/item/subscribe",
@@ -348,9 +397,7 @@ async def websocket_handle_subscribe_todo_items(
         connection.send_message(
             websocket_api.event_message(
                 msg["id"],
-                {
-                    "items": todo_items,
-                },
+                {"items": todo_items},
             )
         )
 
@@ -359,7 +406,7 @@ async def websocket_handle_subscribe_todo_items(
     )
     connection.send_result(msg["id"])
 
-    # Push an initial forecast update
+    # Push an initial update
     entity.async_update_listeners()
 
 
@@ -448,14 +495,27 @@ async def websocket_handle_todo_item_move(
         connection.send_result(msg["id"])
 
 
+# def _find_by_uid_or_summary(
+#     value: str, items: list[TodoItem] | None
+# ) -> TodoItem | None:
+#     """Find a To-do List item by uid or summary name."""
+#     for item in items or ():
+#         if value in (item.uid, item.summary):
+#             return item
+#     return None
+
+
+# New: Refined Helper Functions and update comments
 def _find_by_uid_or_summary(
-    value: str, items: list[TodoItem] | None
+    item_identifier: str, items: list[TodoItem] | None
 ) -> TodoItem | None:
-    """Find a To-do List item by uid or summary name."""
-    for item in items or ():
-        if value in (item.uid, item.summary):
-            return item
-    return None
+    # Find a To-do item by the the UID or summary.
+    # This will return the matching TodoItem or None if no To-Do item is found.
+
+    return next(
+        (item for item in items or [] if item_identifier in (item.uid, item.summary)),
+        None,
+    )
 
 
 async def _async_add_todo_item(entity: TodoListEntity, call: ServiceCall) -> None:
@@ -475,7 +535,11 @@ async def _async_add_todo_item(entity: TodoListEntity, call: ServiceCall) -> Non
 
 
 async def _async_update_todo_item(entity: TodoListEntity, call: ServiceCall) -> None:
-    """Update an item in the To-do list."""
+    """Update an item in the To-do list.
+
+    If item is not found in the list, it should return 'item not found'
+
+    """
     item = call.data["item"]
     found = _find_by_uid_or_summary(item, entity.todo_items)
     if not found:
@@ -487,9 +551,8 @@ async def _async_update_todo_item(entity: TodoListEntity, call: ServiceCall) -> 
 
     _validate_supported_features(entity.supported_features, call.data)
 
-    # Perform a partial update on the existing entity based on the fields
-    # present in the update. This allows explicitly clearing any of the
-    # extended fields present and set to None.
+    # This will perform a partial update on the existing entity based on the fields present in the update.This should also allows explicitly clearing any of the extended fields present and set to None.
+
     updated_data = dataclasses.asdict(found)
     if summary := call.data.get("rename"):
         updated_data["summary"] = summary
@@ -506,7 +569,11 @@ async def _async_update_todo_item(entity: TodoListEntity, call: ServiceCall) -> 
 
 
 async def _async_remove_todo_items(entity: TodoListEntity, call: ServiceCall) -> None:
-    """Remove an item in the To-do list."""
+    """Remove an item in the To-do list.
+
+    If item is not found in the list, it should return 'item not found'.
+
+    """
     uids = []
     for item in call.data.get("item", []):
         found = _find_by_uid_or_summary(item, entity.todo_items)
@@ -534,7 +601,7 @@ async def _async_get_todo_items(
 
 
 async def _async_remove_completed_items(entity: TodoListEntity, _: ServiceCall) -> None:
-    """Remove all completed items from the To-do list."""
+    """Remove completed items from the To-do list by the UID only if the item is already completed."""
     uids = [
         item.uid
         for item in entity.todo_items or ()
