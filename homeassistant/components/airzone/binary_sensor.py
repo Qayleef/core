@@ -30,6 +30,7 @@ from .coordinator import AirzoneUpdateCoordinator
 from .entity import AirzoneEntity, AirzoneSystemEntity, AirzoneZoneEntity
 
 
+# Define a dataclass for binary sensor entity descriptions
 @dataclass(frozen=True)
 class AirzoneBinarySensorEntityDescription(BinarySensorEntityDescription):
     """A class that describes airzone binary sensor entities."""
@@ -74,6 +75,7 @@ ZONE_BINARY_SENSOR_TYPES: Final[tuple[AirzoneBinarySensorEntityDescription, ...]
 )
 
 
+# Entry point for setting up binary sensors for an Airzone integration
 async def async_setup_entry(
     hass: HomeAssistant,
     entry: AirzoneConfigEntry,
@@ -85,6 +87,7 @@ async def async_setup_entry(
     added_systems: set[str] = set()
     added_zones: set[str] = set()
 
+    # Listener to handle additions of new entities dynamically
     def _async_entity_listener() -> None:
         """Handle additions of binary sensors."""
 
@@ -132,6 +135,7 @@ async def async_setup_entry(
     _async_entity_listener()
 
 
+# Base class for Airzone binary sensors
 class AirzoneBinarySensor(AirzoneEntity, BinarySensorEntity):
     """Define an Airzone binary sensor."""
 
@@ -154,6 +158,7 @@ class AirzoneBinarySensor(AirzoneEntity, BinarySensorEntity):
             }
 
 
+# Binary sensor specific to Airzone systems
 class AirzoneSystemBinarySensor(AirzoneSystemEntity, AirzoneBinarySensor):
     """Define an Airzone System binary sensor."""
 
@@ -165,13 +170,14 @@ class AirzoneSystemBinarySensor(AirzoneSystemEntity, AirzoneBinarySensor):
         system_id: str,
         system_data: dict[str, Any],
     ) -> None:
-        """Initialize."""
+        """Initialize the system binary sensor."""
         super().__init__(coordinator, entry, system_data)
         self._attr_unique_id = f"{self._attr_unique_id}_{system_id}_{description.key}"
         self.entity_description = description
         self._async_update_attrs()
 
 
+# Binary sensor specific to Airzone zones
 class AirzoneZoneBinarySensor(AirzoneZoneEntity, AirzoneBinarySensor):
     """Define an Airzone Zone binary sensor."""
 
@@ -183,7 +189,7 @@ class AirzoneZoneBinarySensor(AirzoneZoneEntity, AirzoneBinarySensor):
         system_zone_id: str,
         zone_data: dict[str, Any],
     ) -> None:
-        """Initialize."""
+        """Initialize the zone binary sensor."""
         super().__init__(coordinator, entry, system_zone_id, zone_data)
 
         self._attr_unique_id = (
