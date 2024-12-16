@@ -1,4 +1,35 @@
-"""Rest API for Home Assistant."""
+"""Rest API for Home Assistant.
+This module provides the REST API for Home Assistant, enabling external applications and services to interact with Home Assistant. 
+The API allows for status checks, core state retrieval, event streaming, configuration access, state management, event handling, service calls, and component management
+
+
+Classes:
+- APIStatusView: Handles status requests to check if the API is running. 
+- APICoreStateView: Handles core state requests to check if Home Assistant core is running. 
+- APIEventStream: Provides a streaming interface for the event bus. 
+- APIConfigView: Handles configuration requests to retrieve the current configuration. 
+- APIStatesView: Handles state requests to get the current states of entities. 
+- APIEntityStateView: Handles entity state requests to retrieve, update, or remove the state of a specific entity. 
+- APIEventListenersView: Handles event listener requests to get the current event listeners. 
+- APIEventView: Handles event requests to fire events.
+- APIServicesView: Handles service requests to get registered services. 
+- APIDomainServicesView: Handles domain service requests to call a service and return a list of changed states. 
+- APIComponentsView: Handles component requests to get the currently loaded components.
+- APITemplateView: Handles template requests to render templates. 
+- APIErrorLog: Fetches the API error log.
+
+
+Functions: 
+- async_setup(hass: HomeAssistant, config: ConfigType) -> bool: Registers the API with the HTTP interface. 
+- async_services_json(hass: HomeAssistant) -> list[dict[str, Any]]: Generates services data to JSONify. 
+- async_events_json(hass: HomeAssistant) -> list[dict[str, Any]]: Generates event data to JSONify.
+
+
+"""
+
+
+
+
 
 import asyncio
 from asyncio import shield, timeout
@@ -72,7 +103,13 @@ CONFIG_SCHEMA = cv.empty_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Register the API with the HTTP interface."""
+    """Register the API with the HTTP interface.
+    Parameters: 
+    hass (HomeAssistant): The Home Assistant instance. 
+    config (ConfigType): The configuration for the API component. 
+    
+    Returns: bool: True if the setup was successful, False otherwise.
+    """
     hass.http.register_view(APIStatusView)
     hass.http.register_view(APICoreStateView)
     hass.http.register_view(APIEventStream)
@@ -93,19 +130,29 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 
 class APIStatusView(HomeAssistantView):
-    """View to handle Status requests."""
+    """View to handle Status requests.
+    Methods: - get(self, request: web.Request) -> web.Response: Retrieve if API is running. 
+    """
 
     url = URL_API
     name = "api:status"
 
     @ha.callback
     def get(self, request: web.Request) -> web.Response:
-        """Retrieve if API is running."""
+        """Retrieve if API is running.
+        Parameters: 
+        request (web.Request): The web request. 
+        
+        Returns: 
+        web.Response: The response indicating if the API is running.
+        """
         return self.json_message("API running.")
 
 
 class APICoreStateView(HomeAssistantView):
-    """View to handle core state requests."""
+    """View to handle core state requests.
+    Methods: - get(self, request: web.Request) -> web.Response: Retrieve if API is running. 
+    """
 
     url = URL_API_CORE_STATE
     name = "api:core:state"
@@ -117,6 +164,12 @@ class APICoreStateView(HomeAssistantView):
         This API is intended to be a fast and lightweight way to check if the
         Home Assistant core is running. Its primary use case is for supervisor
         to check if Home Assistant is running.
+
+        Parameters: 
+        request (web.Request): The web request.
+
+        Returns: 
+        web.Response: The response containing the current core state.
         """
         hass = request.app[KEY_HASS]
         migration = recorder.async_migration_in_progress(hass)
@@ -126,14 +179,23 @@ class APICoreStateView(HomeAssistantView):
 
 
 class APIEventStream(HomeAssistantView):
-    """View to handle EventStream requests."""
+    """View to handle EventStream requests.
+    Methods: 
+    - get(self, request: web.Request) -> web.StreamResponse: Provide a streaming interface for the event bus.
+    """
 
     url = URL_API_STREAM
     name = "api:stream"
 
     @require_admin
     async def get(self, request: web.Request) -> web.StreamResponse:
-        """Provide a streaming interface for the event bus."""
+        """Provide a streaming interface for the event bus.
+        Parameters: 
+        request (web.Request): The web request.
+
+        Returns: 
+        web.StreamResponse: The streaming response for the event bus.
+        """
         hass = request.app[KEY_HASS]
         stop_obj = object()
         to_write: asyncio.Queue[object | str] = asyncio.Queue()
@@ -143,7 +205,11 @@ class APIEventStream(HomeAssistantView):
             restrict = [*restrict_str.split(","), EVENT_HOMEASSISTANT_STOP]
 
         async def forward_events(event: Event) -> None:
-            """Forward events to the open request."""
+            """Forward events to the open request.
+            
+            Parameters: 
+            event (Event): The event to forward.
+            """
             if restrict and event.event_type not in restrict:
                 return
 
@@ -193,26 +259,46 @@ class APIEventStream(HomeAssistantView):
 
 
 class APIConfigView(HomeAssistantView):
-    """View to handle Configuration requests."""
+    """View to handle Configuration requests.
+
+    Methods: 
+    - get(self, request: web.Request) -> web.Response: Get current configuration.
+    """
 
     url = URL_API_CONFIG
     name = "api:config"
 
     @ha.callback
     def get(self, request: web.Request) -> web.Response:
-        """Get current configuration."""
+        """Get current configuration.
+
+        Parameters: 
+        request (web.Request): The web request.
+        
+        Returns: 
+        web.Response: The response containing the current configuration.
+        """
         return self.json(request.app[KEY_HASS].config.as_dict())
 
 
 class APIStatesView(HomeAssistantView):
-    """View to handle States requests."""
+    """View to handle States requests.
+    Methods: 
+    - get(self, request: web.Request) -> web.Response: Get current states.
+    """
 
     url = URL_API_STATES
     name = "api:states"
 
     @ha.callback
     def get(self, request: web.Request) -> web.Response:
-        """Get current states."""
+        """Get current states.
+        Parameters: 
+        request (web.Request): The web request.
+
+        Returns: 
+        web.Response: The response containing the current states.
+        """
         user: User = request[KEY_HASS_USER]
         hass = request.app[KEY_HASS]
         if user.is_admin:
@@ -234,14 +320,26 @@ class APIStatesView(HomeAssistantView):
 
 
 class APIEntityStateView(HomeAssistantView):
-    """View to handle EntityState requests."""
+    """View to handle EntityState requests.
+    Methods: 
+    - get(self, request: web.Request, entity_id: str) -> web.Response: Retrieve state of entity. 
+    - post(self, request: web.Request, entity_id: str) -> web.Response: Update state of entity. 
+    - delete(self, request: web.Request, entity_id: str) -> web.Response: Remove entity.
+    """
 
     url = "/api/states/{entity_id}"
     name = "api:entity-state"
 
     @ha.callback
     def get(self, request: web.Request, entity_id: str) -> web.Response:
-        """Retrieve state of entity."""
+        """Retrieve state of entity.
+        Parameters: 
+        request (web.Request): The web request. 
+        entity_id (str): The ID of the entity. 
+        
+        Returns: 
+        web.Response: The response containing the state of the entity.
+        """
         user: User = request[KEY_HASS_USER]
         hass = request.app[KEY_HASS]
         if not user.permissions.check_entity(entity_id, POLICY_READ):
@@ -255,7 +353,14 @@ class APIEntityStateView(HomeAssistantView):
         return self.json_message("Entity not found.", HTTPStatus.NOT_FOUND)
 
     async def post(self, request: web.Request, entity_id: str) -> web.Response:
-        """Update state of entity."""
+        """Update state of entity.
+        Parameters: 
+        request (web.Request): The web request. 
+        entity_id (str): The ID of the entity. 
+        
+        Returns: 
+        web.Response: The response indicating the result of the update.
+        """
         user: User = request[KEY_HASS_USER]
         if not user.is_admin:
             raise Unauthorized(entity_id=entity_id)
@@ -297,7 +402,14 @@ class APIEntityStateView(HomeAssistantView):
 
     @ha.callback
     def delete(self, request: web.Request, entity_id: str) -> web.Response:
-        """Remove entity."""
+        """Remove entity.
+        Parameters: 
+        request (web.Request): The web request. 
+        entity_id (str): The ID of the entity. 
+        
+        Returns: 
+        web.Response: The response indicating the result of the removal.
+        """
         if not request[KEY_HASS_USER].is_admin:
             raise Unauthorized(entity_id=entity_id)
         if request.app[KEY_HASS].states.async_remove(entity_id):
@@ -306,26 +418,46 @@ class APIEntityStateView(HomeAssistantView):
 
 
 class APIEventListenersView(HomeAssistantView):
-    """View to handle EventListeners requests."""
+    """View to handle EventListeners requests.
+    Methods: 
+    - get(self, request: web.Request) -> web.Response: Get event listeners.
+    """
 
     url = URL_API_EVENTS
     name = "api:event-listeners"
 
     @ha.callback
     def get(self, request: web.Request) -> web.Response:
-        """Get event listeners."""
+        """Get event listeners.
+
+        Parameters: 
+        request (web.Request): The web request.
+        
+        Returns: 
+        web.Response: The response containing the event listeners.
+        """
         return self.json(async_events_json(request.app[KEY_HASS]))
 
 
 class APIEventView(HomeAssistantView):
-    """View to handle Event requests."""
+    """View to handle Event requests.
+    Methods: 
+    - post(self, request: web.Request, event_type: str) -> web.Response: Fire events.
+    """
 
     url = "/api/events/{event_type}"
     name = "api:event"
 
     @require_admin
     async def post(self, request: web.Request, event_type: str) -> web.Response:
-        """Fire events."""
+        """Fire events.
+        Parameters: 
+        request (web.Request): The web request. 
+        event_type (str): The type of the event. 
+        
+        Returns: 
+        web.Response: The response indicating the result of the event firing.
+        """
         body = await request.text()
         try:
             event_data: Any = json_loads(body) if body else None
@@ -356,19 +488,31 @@ class APIEventView(HomeAssistantView):
 
 
 class APIServicesView(HomeAssistantView):
-    """View to handle Services requests."""
+    """View to handle Services requests.
+    Methods: 
+    - get(self, request: web.Request) -> web.Response: Get registered services. 
+    """
 
     url = URL_API_SERVICES
     name = "api:services"
 
     async def get(self, request: web.Request) -> web.Response:
-        """Get registered services."""
+        """Get registered services.
+        
+        Parameters: request (web.Request): The web request.
+        
+        Returns: web.Response: The response containing the registered services.
+        """
         services = await async_services_json(request.app[KEY_HASS])
         return self.json(services)
 
 
 class APIDomainServicesView(HomeAssistantView):
-    """View to handle DomainServices requests."""
+    """View to handle DomainServices requests.
+    
+    Methods: 
+    - post(self, request: web.Request, domain: str, service: str) -> web.Response: Call a service and return a list of changed states. 
+    """
 
     url = "/api/services/{domain}/{service}"
     name = "api:domain-services"
@@ -376,9 +520,16 @@ class APIDomainServicesView(HomeAssistantView):
     async def post(
         self, request: web.Request, domain: str, service: str
     ) -> web.Response:
-        """Call a service.
+        """
+        Call a service.Returns a list of changed states.
 
-        Returns a list of changed states.
+        Parameters: 
+        request (web.Request): The web request. 
+        domain (str): The domain of the service. 
+        service (str): The name of the service. 
+        
+        Returns: 
+        web.Response: The response containing the list of changed states.
         """
         hass = request.app[KEY_HASS]
         body = await request.text()
@@ -417,6 +568,18 @@ class APIDomainServicesView(HomeAssistantView):
         def _async_save_changed_entities(
             event: Event[EventStateChangedData],
         ) -> None:
+            """ Save the state of entities that have changed. 
+            
+            Parameters: 
+            event (Event[EventStateChangedData]): The event containing the state change data. 
+            Returns: None 
+            
+            This function is called whenever an event of type EVENT_STATE_CHANGED is fired. 
+            It checks if the event's context matches the current context and if the new state is not None. 
+            If both conditions are met, it appends the new state to the list of changed states. 
+            """
+
+            
             if event.context == context and (state := event.data["new_state"]):
                 changed_states.append(state.json_fragment)
 
@@ -451,32 +614,51 @@ class APIDomainServicesView(HomeAssistantView):
 
 
 class APIComponentsView(HomeAssistantView):
-    """View to handle Components requests."""
+    """View to handle Components requests.
+    Methods: - get(self, request: web.Request) -> web.Response: Get current loaded components.
+    """
 
     url = URL_API_COMPONENTS
     name = "api:components"
 
     @ha.callback
     def get(self, request: web.Request) -> web.Response:
-        """Get current loaded components."""
+        """Get current loaded components.
+        Parameters: request (web.Request): The web request. 
+        Returns: web.Response: The response containing the current loaded components. 
+        """
         return self.json(request.app[KEY_HASS].config.components)
 
 
 @lru_cache
 def _cached_template(template_str: str, hass: HomeAssistant) -> template.Template:
-    """Return a cached template."""
+    """Return a cached template.
+    
+    Parameters: 
+    template_str (str): The template string. 
+    hass (HomeAssistant): The Home Assistant instance. 
+    
+    Returns: template.Template: The cached template.
+    """
     return template.Template(template_str, hass)
 
 
 class APITemplateView(HomeAssistantView):
-    """View to handle Template requests."""
+    """View to handle Template requests.
+    Methods: - post(self, request: web.Request) -> web.Response: Render a template. 
+    """
 
     url = URL_API_TEMPLATE
     name = "api:template"
 
     @require_admin
     async def post(self, request: web.Request) -> web.Response:
-        """Render a template."""
+        """Render a template.
+        
+        Parameters: request (web.Request): The web request. 
+        
+        Returns: web.Response: The response containing the rendered template.
+        """
         try:
             data = await request.json()
             tpl = _cached_template(data["template"], request.app[KEY_HASS])
@@ -488,14 +670,20 @@ class APITemplateView(HomeAssistantView):
 
 
 class APIErrorLog(HomeAssistantView):
-    """View to fetch the API error log."""
+    """View to fetch the API error log.
+    Methods: - get(self, request: web.Request) -> web.FileResponse: Retrieve API error log.
+    """
 
     url = URL_API_ERROR_LOG
     name = "api:error_log"
 
     @require_admin
     async def get(self, request: web.Request) -> web.FileResponse:
-        """Retrieve API error log."""
+        """Retrieve API error log.
+        Parameters: request (web.Request): The web request. 
+        
+        Returns: web.FileResponse: The response containing the API error log.
+        """
         hass = request.app[KEY_HASS]
         response = web.FileResponse(hass.data[DATA_LOGGING])
         response.enable_compression()
@@ -503,14 +691,22 @@ class APIErrorLog(HomeAssistantView):
 
 
 async def async_services_json(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Generate services data to JSONify."""
+    """Generate services data to JSONify.
+    Parameters: hass (HomeAssistant): The Home Assistant instance. 
+    
+    Returns: list[dict[str, Any]]: The list of services data in JSON format
+    """
     descriptions = await async_get_all_descriptions(hass)
     return [{"domain": key, "services": value} for key, value in descriptions.items()]
 
 
 @ha.callback
 def async_events_json(hass: HomeAssistant) -> list[dict[str, Any]]:
-    """Generate event data to JSONify."""
+    """Generate event data to JSONify.
+    Parameters: hass (HomeAssistant): The Home Assistant instance. 
+    
+    Returns: list[dict[str, Any]]: The list of event data in JSON format.
+    """
     return [
         {"event": key, "listener_count": value}
         for key, value in hass.bus.async_listeners().items()
