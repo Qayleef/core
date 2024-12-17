@@ -171,18 +171,18 @@ class LightGroup(GroupEntity, LightEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Forward the turn_on command to all lights in the light group."""
-        start_time = time.time()
+        start_time: float = time.time()
         _LOGGER.info("Light group turn_on started for %s", self.name)
 
         try:
-            data = {
+            data: dict[str, Any] = {
                 key: value
                 for key, value in kwargs.items()
                 if key in FORWARDED_ATTRIBUTES
             }
             data[ATTR_ENTITY_ID] = self._entity_ids
 
-            _LOGGER.debug("Forwarded turn_on command: %s", data)
+            _LOGGER.debug("Forwarded turn_on command: {data}")
 
             await self.hass.services.async_call(
                 light.DOMAIN,
@@ -192,7 +192,7 @@ class LightGroup(GroupEntity, LightEntity):
                 context=self._context,
             )
 
-            end_time = time.time()
+            end_time: float = time.time()
             _LOGGER.info(
                 "Light group turn_on completed in %.4f seconds", end_time - start_time
             )

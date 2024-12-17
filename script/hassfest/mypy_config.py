@@ -80,6 +80,7 @@ STRICT_SETTINGS: Final[list[str]] = [
     "disallow_untyped_defs",
     "warn_return_any",
     "warn_unreachable",
+    # TODO: turn these on, address issues
     # "disallow_any_generics",
     # "no_implicit_reexport",
 ]
