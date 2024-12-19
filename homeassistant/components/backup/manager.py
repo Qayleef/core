@@ -102,7 +102,7 @@ class BaseBackupManager(abc.ABC):
             return_exceptions=True,
         )
         for result in pre_backup_results:
-            if isinstance(result, Exception):
+            if isinstance(result, Exception):  # comment for Assignment 2
                 raise result
 
     async def async_post_backup_actions(self, **kwargs: Any) -> None:
