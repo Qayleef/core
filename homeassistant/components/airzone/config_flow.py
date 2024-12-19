@@ -20,13 +20,14 @@ from homeassistant.helpers.device_registry import format_mac
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
-
+# Schema for user input during configuration
 CONFIG_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
     }
 )
+# Extended schema for systems requiring a specific system ID
 SYSTEM_ID_SCHEMA = CONFIG_SCHEMA.extend(
     {
         vol.Required(CONF_ID, default=1): int,
@@ -35,7 +36,7 @@ SYSTEM_ID_SCHEMA = CONFIG_SCHEMA.extend(
 
 
 def short_mac(addr: str) -> str:
-    """Convert MAC address to short address."""
+    """Convert MAC address to a shortened format for easier identification."""
     return addr.replace(":", "")[-4:].upper()
 
 
@@ -95,7 +96,7 @@ class AirZoneConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_dhcp(
         self, discovery_info: dhcp.DhcpServiceInfo
     ) -> ConfigFlowResult:
-        """Handle DHCP discovery."""
+        """Handle configuration triggered by DHCP discovery."""
         self._discovered_ip = discovery_info.ip
         self._discovered_mac = discovery_info.macaddress
 
@@ -122,7 +123,7 @@ class AirZoneConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_discovered_connection(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Confirm discovery."""
+        """Confirm and finalize configuration for discovered connections."""
         assert self._discovered_ip is not None
         assert self._discovered_mac is not None
 

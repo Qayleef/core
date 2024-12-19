@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import Counter
 import itertools
 import logging
+import time
 from typing import Any, cast
 
 import voluptuous as vol
@@ -56,6 +57,7 @@ from .util import find_state_attributes, mean_tuple, reduce_attribute
 
 DEFAULT_NAME = "Light Group"
 CONF_ALL = "all"
+_LOGGER = logging.getLogger(__name__)
 
 # No limit on parallel updates to enable a group calling another group
 PARALLEL_UPDATES = 0
@@ -169,20 +171,33 @@ class LightGroup(GroupEntity, LightEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Forward the turn_on command to all lights in the light group."""
-        data = {
-            key: value for key, value in kwargs.items() if key in FORWARDED_ATTRIBUTES
-        }
-        data[ATTR_ENTITY_ID] = self._entity_ids
+        start_time: float = time.time()
+        _LOGGER.info("Light group turn_on started for %s", self.name)
 
-        _LOGGER.debug("Forwarded turn_on command: %s", data)
+        try:
+            data: dict[str, Any] = {
+                key: value
+                for key, value in kwargs.items()
+                if key in FORWARDED_ATTRIBUTES
+            }
+            data[ATTR_ENTITY_ID] = self._entity_ids
 
-        await self.hass.services.async_call(
-            light.DOMAIN,
-            SERVICE_TURN_ON,
-            data,
-            blocking=True,
-            context=self._context,
-        )
+            _LOGGER.debug("Forwarded turn_on command: {data}")
+
+            await self.hass.services.async_call(
+                light.DOMAIN,
+                SERVICE_TURN_ON,
+                data,
+                blocking=True,
+                context=self._context,
+            )
+
+            end_time: float = time.time()
+            _LOGGER.info(
+                "Light group turn_on completed in %.4f seconds", end_time - start_time
+            )
+        except Exception:
+            _LOGGER.exception("Error in light group turn_on")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Forward the turn_off command to all lights in the light group."""

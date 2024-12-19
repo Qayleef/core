@@ -39,7 +39,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class AirzoneEntity(CoordinatorEntity[AirzoneUpdateCoordinator]):
-    """Define an Airzone entity."""
+    """Base class for Airzone entities."""
 
     _attr_has_entity_name = True
 
@@ -49,7 +49,7 @@ class AirzoneEntity(CoordinatorEntity[AirzoneUpdateCoordinator]):
 
 
 class AirzoneSystemEntity(AirzoneEntity):
-    """Define an Airzone System entity."""
+    """Entity representing an Airzone system."""
 
     def __init__(
         self,
@@ -57,7 +57,7 @@ class AirzoneSystemEntity(AirzoneEntity):
         entry: AirzoneConfigEntry,
         system_data: dict[str, Any],
     ) -> None:
-        """Initialize."""
+        """Initialize the Airzone System entity."""
         super().__init__(coordinator)
 
         self.system_id = system_data[AZD_ID]
@@ -87,14 +87,14 @@ class AirzoneSystemEntity(AirzoneEntity):
 
 
 class AirzoneHotWaterEntity(AirzoneEntity):
-    """Define an Airzone Hot Water entity."""
+    """Entity representing an Airzone Hot Water system."""
 
     def __init__(
         self,
         coordinator: AirzoneUpdateCoordinator,
         entry: ConfigEntry,
     ) -> None:
-        """Initialize."""
+        """Initialize the Airzone Hot Water entity."""
         super().__init__(coordinator)
 
         self._attr_device_info = DeviceInfo(
@@ -111,7 +111,7 @@ class AirzoneHotWaterEntity(AirzoneEntity):
         return self.coordinator.data[AZD_HOT_WATER].get(key)
 
     async def _async_update_dhw_params(self, params: dict[str, Any]) -> None:
-        """Send DHW parameters to API."""
+        """Send updated DHW parameters to the Airzone API."""
         _params = {
             API_SYSTEM_ID: 0,
             **params,
@@ -126,14 +126,14 @@ class AirzoneHotWaterEntity(AirzoneEntity):
 
 
 class AirzoneWebServerEntity(AirzoneEntity):
-    """Define an Airzone WebServer entity."""
+    """Entity representing an Airzone WebServer."""
 
     def __init__(
         self,
         coordinator: AirzoneUpdateCoordinator,
         entry: ConfigEntry,
     ) -> None:
-        """Initialize."""
+        """Initialize the Airzone WebServer entity."""
         super().__init__(coordinator)
 
         mac = self.get_airzone_value(AZD_MAC)
@@ -154,7 +154,7 @@ class AirzoneWebServerEntity(AirzoneEntity):
 
 
 class AirzoneZoneEntity(AirzoneEntity):
-    """Define an Airzone Zone entity."""
+    """Entity representing an Airzone Zone."""
 
     def __init__(
         self,
@@ -163,7 +163,7 @@ class AirzoneZoneEntity(AirzoneEntity):
         system_zone_id: str,
         zone_data: dict[str, Any],
     ) -> None:
-        """Initialize."""
+        """Initialize the Airzone Zone entity."""
         super().__init__(coordinator)
 
         self.system_id = zone_data[AZD_SYSTEM]
@@ -194,7 +194,7 @@ class AirzoneZoneEntity(AirzoneEntity):
         return value
 
     async def _async_update_hvac_params(self, params: dict[str, Any]) -> None:
-        """Send HVAC parameters to API."""
+        """Send updated HVAC parameters to the Airzone API."""
         _params = {
             API_SYSTEM_ID: self.system_id,
             API_ZONE_ID: self.zone_id,

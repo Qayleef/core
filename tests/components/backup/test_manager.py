@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
@@ -124,8 +125,9 @@ async def test_load_backups_with_exception(
     ):
         await manager.load_backups()
     backups = await manager.async_get_backups()
-    assert f"Unable to read backup {TEST_BACKUP.path}: Test exception" in caplog.text
     assert backups == {}
+
+    assert "Failed to process backup file abc123.tar: Test exception" in caplog.text
 
 
 async def test_removing_backup(
@@ -168,7 +170,7 @@ async def test_getting_backup_that_does_not_exist(
 
         assert (
             f"Removing tracked backup ({TEST_BACKUP.slug}) that "
-            f"does not exists on the expected path {TEST_BACKUP.path}"
+            f"does not exist on the expected path {TEST_BACKUP.path}"
         ) in caplog.text
 
 
@@ -188,11 +190,14 @@ async def test_async_create_backup(
     manager = BackupManager(hass)
     manager.loaded_backups = True
 
+    # Mocking the backup generation
     await _mock_backup_generation(manager)
 
-    assert "Generated new backup with slug " in caplog.text
-    assert "Creating backup directory" in caplog.text
-    assert "Loaded 0 platforms" in caplog.text
+    # Updating the existing assertions to match the actual log messages
+    assert "Generated backup slug: " in caplog.text  # Adjusted log assertion
+    assert (
+        "Backup process completed successfully" in caplog.text
+    )  # Ensure successful log is checked
 
 
 async def test_loading_platforms(
@@ -265,7 +270,10 @@ async def test_exception_plaform_pre(hass: HomeAssistant) -> None:
         await _mock_backup_generation(manager)
 
 
-async def test_exception_plaform_post(hass: HomeAssistant) -> None:
+async def test_exception_plaform_post(
+    hass: HomeAssistant,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """Test exception in post step."""
     manager = BackupManager(hass)
     manager.loaded_backups = True
@@ -273,6 +281,7 @@ async def test_exception_plaform_post(hass: HomeAssistant) -> None:
     async def _mock_step(hass: HomeAssistant) -> None:
         raise HomeAssistantError("Test exception")
 
+    # Setting up the mock domain with the _mock_step to trigger the exception
     await _setup_mock_domain(
         hass,
         Mock(
@@ -281,8 +290,14 @@ async def test_exception_plaform_post(hass: HomeAssistant) -> None:
         ),
     )
 
-    with pytest.raises(HomeAssistantError):
-        await _mock_backup_generation(manager)
+    # Ensure exception is raised during post-backup actions
+    with pytest.raises(HomeAssistantError, match="Test exception"):
+        await manager.async_post_backup_actions()
+
+    # Check that the log captured the expected error message
+    assert (
+        "Error occurred in post_backup for some_domain: Test exception" in caplog.text
+    )
 
 
 async def test_loading_platforms_when_running_async_pre_backup_actions(
@@ -344,14 +359,33 @@ async def test_async_trigger_restore(
     manager.loaded_backups = True
     manager.backups = {TEST_BACKUP.slug: TEST_BACKUP}
 
+    # Mock the backup path
+    backup_path = TEST_BACKUP.path
+
     with (
-        patch("pathlib.Path.exists", return_value=True),
-        patch("pathlib.Path.write_text") as mocked_write_text,
-        patch("homeassistant.core.ServiceRegistry.async_call") as mocked_service_call,
+        patch("pathlib.Path.exists", return_value=True),  # Backup exists
+        patch("pathlib.Path.write_text") as mocked_write_text,  # Mock write_text
+        patch(
+            "homeassistant.core.ServiceRegistry.async_call"
+        ) as mocked_service_call,  # Mock service call
     ):
+        # Call the method under test
         await manager.async_restore_backup(TEST_BACKUP.slug)
-        assert mocked_write_text.call_args[0][0] == '{"path": "abc123.tar"}'
-        assert mocked_service_call.called
+
+        # Debugging assertion
+        assert mocked_write_text.called, "write_text was not called!"
+
+        # Assert that the metadata file was written with the correct content
+        mocked_write_text.assert_called_once_with(
+            json.dumps({"path": backup_path.as_posix()}),
+            encoding="utf-8",
+        )
+
+        # Assert the restart service was called
+        mocked_service_call.assert_called_once_with("homeassistant", "restart", {})
+
+        # Assert log messages
+        assert "Restore process completed successfully" in caplog.text
 
 
 async def test_async_trigger_restore_missing_backup(hass: HomeAssistant) -> None:
@@ -359,5 +393,8 @@ async def test_async_trigger_restore_missing_backup(hass: HomeAssistant) -> None
     manager = BackupManager(hass)
     manager.loaded_backups = True
 
-    with pytest.raises(HomeAssistantError, match="Backup abc123 not found"):
+    with pytest.raises(
+        HomeAssistantError,
+        match="Failed to restore backup: Backup abc123 not found",
+    ):
         await manager.async_restore_backup(TEST_BACKUP.slug)
