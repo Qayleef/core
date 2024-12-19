@@ -17,6 +17,10 @@ from .conftest import MOCK_CONFIG
 from tests.common import MockConfigEntry
 
 
+class CannotConnect(Exception):
+    """Raised when a connection cannot be established."""
+
+
 async def test_form(
     hass: HomeAssistant, mock_setup_entry: AsyncMock, mock_incomfort: MagicMock
 ) -> None:
@@ -157,3 +161,33 @@ async def test_form_validation(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert "errors" not in result
+
+
+async def test_invalid_host(hass: HomeAssistant, mock_incomfort: MagicMock) -> None:
+    """Test handling of an invalid host in the configuration."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+
+    # Simulate invalid host
+    invalid_config = MOCK_CONFIG.copy()
+    invalid_config[CONF_HOST] = "invalid-host"
+    mock_incomfort.validate_host = AsyncMock(side_effect=CannotConnect)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], invalid_config
+    )
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "cannot_connect"}
+
+    # Retry with valid host
+    valid_config = MOCK_CONFIG
+    mock_incomfort.validate_host = AsyncMock(return_value=True)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], valid_config
+    )
+    await hass.async_block_till_done()
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Intergas InComfort/Intouch Lan2RF gateway"
+    assert result["data"] == MOCK_CONFIG
