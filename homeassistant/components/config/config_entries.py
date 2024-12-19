@@ -32,6 +32,10 @@ from homeassistant.loader import (
     async_get_loaded_integration,
 )
 
+def send_error_response(message: str, status_code: int) -> web.Response:
+    """Helper function to send a standardized error response."""
+    return web.Response(text=message, status=status_code)
+
 
 @callback
 def async_setup(hass: HomeAssistant) -> bool:
@@ -87,14 +91,15 @@ class ConfigManagerEntryResourceView(HomeAssistantView):
     async def delete(self, request: web.Request, entry_id: str) -> web.Response:
         """Delete a config entry."""
         if not request["hass_user"].is_admin:
-            raise Unauthorized(config_entry_id=entry_id, permission="remove")
+            return send_error_response("Unauthorized to remove entry", HTTPStatus.FORBIDDEN)
+
 
         hass = request.app[KEY_HASS]
 
         try:
             result = await hass.config_entries.async_remove(entry_id)
         except config_entries.UnknownEntry:
-            return self.json_message("Invalid entry specified", HTTPStatus.NOT_FOUND)
+            return send_error_response("Invalid entry specified", HTTPStatus.NOT_FOUND)
 
         return self.json(result)
 
