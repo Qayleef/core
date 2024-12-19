@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt  # noqa: D100
 import networkx as nx
 
-# Define the call graph as a directed graph
+# NEW COMMENT TO FOR ASSIGNMENT 2
 call_graph = nx.DiGraph()
 
 # Add nodes and edges based on the extracted methods and their calls
