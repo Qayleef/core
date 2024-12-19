@@ -543,7 +543,7 @@ async def test_purge_edge_case(
                     event_type="EVENT_TEST_PURGE",
                     event_data="{}",
                     origin="LOCAL",
-                    time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                    time_fired_ts=timestamp.timestamp(),
                 )
             )
             session.add(
@@ -551,8 +551,8 @@ async def test_purge_edge_case(
                     entity_id="test.recorder2",
                     state="purgeme",
                     attributes="{}",
-                    last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                    last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                    last_changed_ts=timestamp.timestamp(),
+                    last_updated_ts=timestamp.timestamp(),
                     event_id=1001,
                     attributes_id=1002,
                 )
@@ -614,7 +614,7 @@ async def test_purge_cutoff_date(hass: HomeAssistant, recorder_mock: Recorder) -
                     event_type="KEEP",
                     event_data="{}",
                     origin="LOCAL",
-                    time_fired_ts=dt_util.utc_to_timestamp(timestamp_keep),
+                    time_fired_ts=timestamp_keep.timestamp(),
                 )
             )
             session.add(
@@ -622,8 +622,8 @@ async def test_purge_cutoff_date(hass: HomeAssistant, recorder_mock: Recorder) -
                     entity_id="test.cutoff",
                     state="keep",
                     attributes="{}",
-                    last_changed_ts=dt_util.utc_to_timestamp(timestamp_keep),
-                    last_updated_ts=dt_util.utc_to_timestamp(timestamp_keep),
+                    last_changed_ts=timestamp_keep.timestamp(),
+                    last_updated_ts=timestamp_keep.timestamp(),
                     event_id=1000,
                     attributes_id=1000,
                 )
@@ -642,7 +642,7 @@ async def test_purge_cutoff_date(hass: HomeAssistant, recorder_mock: Recorder) -
                         event_type="PURGE",
                         event_data="{}",
                         origin="LOCAL",
-                        time_fired_ts=dt_util.utc_to_timestamp(timestamp_purge),
+                        time_fired_ts=timestamp_purge.timestamp(),
                     )
                 )
                 session.add(
@@ -650,8 +650,8 @@ async def test_purge_cutoff_date(hass: HomeAssistant, recorder_mock: Recorder) -
                         entity_id="test.cutoff",
                         state="purge",
                         attributes="{}",
-                        last_changed_ts=dt_util.utc_to_timestamp(timestamp_purge),
-                        last_updated_ts=dt_util.utc_to_timestamp(timestamp_purge),
+                        last_changed_ts=timestamp_purge.timestamp(),
+                        last_updated_ts=timestamp_purge.timestamp(),
                         event_id=1000 + row,
                         attributes_id=1000 + row,
                     )
@@ -800,8 +800,8 @@ async def test_purge_filtered_states(
                     entity_id="sensor.excluded",
                     state="purgeme",
                     attributes="{}",
-                    last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                    last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                    last_changed_ts=timestamp.timestamp(),
+                    last_updated_ts=timestamp.timestamp(),
                 )
             )
             # Add states and state_changed events that should be keeped
@@ -826,8 +826,8 @@ async def test_purge_filtered_states(
                 entity_id="sensor.linked_old_state_id",
                 state="keep",
                 attributes="{}",
-                last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                last_changed_ts=timestamp.timestamp(),
+                last_updated_ts=timestamp.timestamp(),
                 old_state_id=1,
                 state_attributes=state_attrs,
             )
@@ -836,8 +836,8 @@ async def test_purge_filtered_states(
                 entity_id="sensor.linked_old_state_id",
                 state="keep",
                 attributes="{}",
-                last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                last_changed_ts=timestamp.timestamp(),
+                last_updated_ts=timestamp.timestamp(),
                 old_state_id=2,
                 state_attributes=state_attrs,
             )
@@ -845,8 +845,8 @@ async def test_purge_filtered_states(
                 entity_id="sensor.linked_old_state_id",
                 state="keep",
                 attributes="{}",
-                last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                last_changed_ts=timestamp.timestamp(),
+                last_updated_ts=timestamp.timestamp(),
                 old_state_id=62,  # keep
                 state_attributes=state_attrs,
             )
@@ -858,7 +858,7 @@ async def test_purge_filtered_states(
                     event_type="EVENT_KEEP",
                     event_data="{}",
                     origin="LOCAL",
-                    time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                    time_fired_ts=timestamp.timestamp(),
                 )
             )
             convert_pending_states_to_meta(recorder_mock, session)
@@ -1042,8 +1042,8 @@ async def test_purge_without_state_attributes_filtered_states_to_empty(
                     entity_id="sensor.old_format",
                     state=STATE_ON,
                     attributes=json.dumps({"old": "not_using_state_attributes"}),
-                    last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                    last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                    last_changed_ts=timestamp.timestamp(),
+                    last_updated_ts=timestamp.timestamp(),
                     event_id=event_id,
                     state_attributes=None,
                 )
@@ -1054,7 +1054,7 @@ async def test_purge_without_state_attributes_filtered_states_to_empty(
                     event_type=EVENT_STATE_CHANGED,
                     event_data="{}",
                     origin="LOCAL",
-                    time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                    time_fired_ts=timestamp.timestamp(),
                 )
             )
             session.add(
@@ -1063,7 +1063,7 @@ async def test_purge_without_state_attributes_filtered_states_to_empty(
                     event_type=EVENT_THEMES_UPDATED,
                     event_data="{}",
                     origin="LOCAL",
-                    time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                    time_fired_ts=timestamp.timestamp(),
                 )
             )
             convert_pending_states_to_meta(recorder_mock, session)
@@ -1118,7 +1118,7 @@ async def test_purge_filtered_events(
                             event_type="EVENT_PURGE",
                             event_data="{}",
                             origin="LOCAL",
-                            time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                            time_fired_ts=timestamp.timestamp(),
                         )
                     )
 
@@ -1225,7 +1225,7 @@ async def test_purge_filtered_events_state_changed(
                         event_type="EVENT_KEEP",
                         event_data="{}",
                         origin="LOCAL",
-                        time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                        time_fired_ts=timestamp.timestamp(),
                     )
                 )
             # Add states with linked old_state_ids that need to be handled
@@ -1234,8 +1234,8 @@ async def test_purge_filtered_events_state_changed(
                 entity_id="sensor.linked_old_state_id",
                 state="keep",
                 attributes="{}",
-                last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                last_changed_ts=timestamp.timestamp(),
+                last_updated_ts=timestamp.timestamp(),
                 old_state_id=1,
             )
             timestamp = dt_util.utcnow() - timedelta(days=4)
@@ -1243,16 +1243,16 @@ async def test_purge_filtered_events_state_changed(
                 entity_id="sensor.linked_old_state_id",
                 state="keep",
                 attributes="{}",
-                last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                last_changed_ts=timestamp.timestamp(),
+                last_updated_ts=timestamp.timestamp(),
                 old_state_id=2,
             )
             state_3 = States(
                 entity_id="sensor.linked_old_state_id",
                 state="keep",
                 attributes="{}",
-                last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                last_changed_ts=timestamp.timestamp(),
+                last_updated_ts=timestamp.timestamp(),
                 old_state_id=62,  # keep
             )
             session.add_all((state_1, state_2, state_3))
@@ -1262,7 +1262,7 @@ async def test_purge_filtered_events_state_changed(
                     event_type="excluded_event",
                     event_data="{}",
                     origin="LOCAL",
-                    time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                    time_fired_ts=timestamp.timestamp(),
                 )
             )
             session.add(
@@ -1270,8 +1270,8 @@ async def test_purge_filtered_events_state_changed(
                     entity_id="sensor.old_format",
                     state="remove",
                     attributes="{}",
-                    last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-                    last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                    last_changed_ts=timestamp.timestamp(),
+                    last_updated_ts=timestamp.timestamp(),
                 )
             )
             convert_pending_events_to_event_types(recorder_mock, session)
@@ -1637,8 +1637,8 @@ def _add_state_without_event_linkage(
             entity_id=entity_id,
             state=state,
             attributes=None,
-            last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-            last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+            last_changed_ts=timestamp.timestamp(),
+            last_updated_ts=timestamp.timestamp(),
             event_id=None,
             state_attributes=state_attrs,
         )
@@ -1662,8 +1662,8 @@ def _add_state_with_state_attributes(
             entity_id=entity_id,
             state=state,
             attributes=None,
-            last_changed_ts=dt_util.utc_to_timestamp(timestamp),
-            last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+            last_changed_ts=timestamp.timestamp(),
+            last_updated_ts=timestamp.timestamp(),
             event_id=event_id,
             state_attributes=state_attrs,
         )
@@ -1785,7 +1785,7 @@ async def test_purge_old_events_purges_the_event_type_ids(
                         Events(
                             event_type=None,
                             event_type_id=event_type.event_type_id,
-                            time_fired_ts=dt_util.utc_to_timestamp(timestamp),
+                            time_fired_ts=timestamp.timestamp(),
                         )
                     )
             return recorder_mock.event_type_manager.get_many(
@@ -1915,7 +1915,7 @@ async def test_purge_old_states_purges_the_state_metadata_ids(
                         States(
                             metadata_id=metadata_id,
                             state="any",
-                            last_updated_ts=dt_util.utc_to_timestamp(timestamp),
+                            last_updated_ts=timestamp.timestamp(),
                         )
                     )
             return recorder_mock.states_meta_manager.get_many(
