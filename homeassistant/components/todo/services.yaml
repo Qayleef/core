@@ -13,6 +13,7 @@ get_items:
             - needs_action
             - completed
           multiple: true
+
 add_item:
   target:
     entity:
@@ -46,6 +47,7 @@ add_item:
       example: "A more complete description of the to-do item than that provided by the summary."
       selector:
         text:
+
 update_item:
   target:
     entity:
@@ -91,6 +93,7 @@ update_item:
       example: "A more complete description of the to-do item than that provided by the summary."
       selector:
         text:
+
 remove_item:
   target:
     entity:
@@ -104,6 +107,13 @@ remove_item:
         text:
 
 remove_completed_items:
+  target:
+    entity:
+      domain: todo
+      supported_features:
+        - todo.TodoListEntityFeature.DELETE_TODO_ITEM
+
+remove_all_items:
   target:
     entity:
       domain: todo
