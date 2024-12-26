@@ -360,7 +360,10 @@ class Group(Entity):
     def async_update_group_state(self) -> None:
         """Query all members and determine current group state."""
         self._state = None
-        self._async_update_group_state()
+        try:
+            self._async_update_group_state()
+        except Exception:
+            _LOGGER.exception("Error updating group %s", self.entity_id)
 
     async def async_added_to_hass(self) -> None:
         """Handle addition to Home Assistant."""
