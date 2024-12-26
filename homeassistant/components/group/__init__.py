@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Collection
 import logging
+import os
 from typing import Any
 
 import voluptuous as vol
+import yaml
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -57,7 +59,7 @@ from .entity import Group, async_get_component
 from .registry import async_setup as async_setup_registry
 
 CONF_ALL = "all"
-
+CONF_GROUP_CONFIG_FILE = "group_config_file"
 
 SERVICE_SET = "set"
 SERVICE_REMOVE = "remove"
@@ -96,8 +98,19 @@ GROUP_SCHEMA = vol.All(
     )
 )
 
+# CONFIG_SCHEMA = vol.Schema(
+#     {DOMAIN: vol.Schema({cv.match_all: vol.All(_conf_preprocess, GROUP_SCHEMA)})},
+#     extra=vol.ALLOW_EXTRA,
+# )
 CONFIG_SCHEMA = vol.Schema(
-    {DOMAIN: vol.Schema({cv.match_all: vol.All(_conf_preprocess, GROUP_SCHEMA)})},
+    {
+        DOMAIN: vol.Schema(
+            {
+                vol.Optional(CONF_GROUP_CONFIG_FILE): cv.string,
+                cv.match_all: vol.All(_conf_preprocess, GROUP_SCHEMA),
+            }
+        )
+    },
     extra=vol.ALLOW_EXTRA,
 )
 
@@ -134,6 +147,26 @@ def groups_with_entity(hass: HomeAssistant, entity_id: str) -> list[str]:
         for group in hass.data[DATA_COMPONENT].entities
         if entity_id in group.tracking
     ]
+
+
+async def _async_load_group_config_file(
+    hass: HomeAssistant, config_path: str | None
+) -> dict[str, Any]:
+    """Load group config from file."""
+    group_config: dict[str, Any] = {}
+    if config_path:
+        full_path = hass.config.path(config_path)
+        if os.path.exists(full_path):
+            try:
+                with open(full_path, "r", encoding="utf-8") as file:  # noqa: ASYNC230, UP015
+                    group_config = yaml.safe_load(file)
+            except FileNotFoundError:
+                _LOGGER.warning("Group config file not found: %s", full_path)
+            except yaml.YAMLError as e:
+                _LOGGER.warning("Error loading group config file %s: %s", full_path, e)
+        else:
+            _LOGGER.warning("Group config file not found %s", full_path)
+    return group_config
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
