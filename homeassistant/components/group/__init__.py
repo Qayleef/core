@@ -341,13 +341,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         schema=vol.All(
             vol.Schema(
                 {
-                    vol.Required(ATTR_OBJECT_ID): cv.slug,
-                    vol.Optional(ATTR_NAME): cv.string,
-                    vol.Optional(ATTR_ICON): cv.string,
-                    vol.Optional(ATTR_ALL): cv.boolean,
-                    vol.Exclusive(ATTR_ENTITIES, "entities"): cv.entity_ids,
-                    vol.Exclusive(ATTR_ADD_ENTITIES, "entities"): cv.entity_ids,
-                    vol.Exclusive(ATTR_REMOVE_ENTITIES, "entities"): cv.entity_ids,
+                    vol.Required(
+                        ATTR_OBJECT_ID, description="Object ID of the group to set"
+                    ): cv.slug,
+                    vol.Optional(ATTR_NAME, description="Name of the group"): cv.string,
+                    vol.Optional(ATTR_ICON, description="Icon of the group"): cv.string,
+                    vol.Optional(
+                        ATTR_ALL, description="Set to True to make this an all-group"
+                    ): cv.boolean,
+                    vol.Exclusive(
+                        ATTR_ENTITIES, "entities", description="Entities of the group"
+                    ): cv.entity_ids,
+                    vol.Exclusive(
+                        ATTR_ADD_ENTITIES,
+                        "entities",
+                        description="Entities to add to the group",
+                    ): cv.entity_ids,
+                    vol.Exclusive(
+                        ATTR_REMOVE_ENTITIES,
+                        "entities",
+                        description="Entities to remove from the group",
+                    ): cv.entity_ids,
                 }
             )
         ),
@@ -357,7 +371,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN,
         SERVICE_REMOVE,
         groups_service_handler,
-        schema=vol.Schema({vol.Required(ATTR_OBJECT_ID): cv.slug}),
+        schema=vol.Schema(
+            {
+                vol.Required(
+                    ATTR_OBJECT_ID, description="Object ID of the group to remove"
+                ): cv.slug
+            }
+        ),
     )
 
     return True
