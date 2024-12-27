@@ -5,9 +5,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Collection
 import logging
+import os
 from typing import Any
 
 import voluptuous as vol
+import yaml
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -57,7 +59,7 @@ from .entity import Group, async_get_component
 from .registry import async_setup as async_setup_registry
 
 CONF_ALL = "all"
-
+CONF_GROUP_CONFIG_FILE = "group_config_file"
 
 SERVICE_SET = "set"
 SERVICE_REMOVE = "remove"
@@ -96,8 +98,19 @@ GROUP_SCHEMA = vol.All(
     )
 )
 
+# CONFIG_SCHEMA = vol.Schema(
+#     {DOMAIN: vol.Schema({cv.match_all: vol.All(_conf_preprocess, GROUP_SCHEMA)})},
+#     extra=vol.ALLOW_EXTRA,
+# )
 CONFIG_SCHEMA = vol.Schema(
-    {DOMAIN: vol.Schema({cv.match_all: vol.All(_conf_preprocess, GROUP_SCHEMA)})},
+    {
+        DOMAIN: vol.Schema(
+            {
+                vol.Optional(CONF_GROUP_CONFIG_FILE): cv.string,
+                cv.match_all: vol.All(_conf_preprocess, GROUP_SCHEMA),
+            }
+        )
+    },
     extra=vol.ALLOW_EXTRA,
 )
 
@@ -134,6 +147,26 @@ def groups_with_entity(hass: HomeAssistant, entity_id: str) -> list[str]:
         for group in hass.data[DATA_COMPONENT].entities
         if entity_id in group.tracking
     ]
+
+
+async def _async_load_group_config_file(
+    hass: HomeAssistant, config_path: str | None
+) -> dict[str, Any]:
+    """Load group config from file."""
+    group_config: dict[str, Any] = {}
+    if config_path:
+        full_path = hass.config.path(config_path)
+        if os.path.exists(full_path):
+            try:
+                with open(full_path, "r", encoding="utf-8") as file:  # noqa: ASYNC230, UP015
+                    group_config = yaml.safe_load(file)
+            except FileNotFoundError:
+                _LOGGER.warning("Group config file not found: %s", full_path)
+            except yaml.YAMLError as e:
+                _LOGGER.warning("Error loading group config file %s: %s", full_path, e)
+        else:
+            _LOGGER.warning("Group config file not found %s", full_path)
+    return group_config
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -229,69 +262,77 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         object_id = service.data[ATTR_OBJECT_ID]
         entity_id = f"{DOMAIN}.{object_id}"
         group = component.get_entity(entity_id)
+        try:
+            # new group
+            if service.service == SERVICE_SET and group is None:
+                entity_ids = (
+                    service.data.get(ATTR_ENTITIES)
+                    or service.data.get(ATTR_ADD_ENTITIES)
+                    or None
+                )
 
-        # new group
-        if service.service == SERVICE_SET and group is None:
-            entity_ids = (
-                service.data.get(ATTR_ENTITIES)
-                or service.data.get(ATTR_ADD_ENTITIES)
-                or None
-            )
+                await Group.async_create_group(
+                    hass,
+                    service.data.get(ATTR_NAME, object_id),
+                    created_by_service=True,
+                    entity_ids=entity_ids,
+                    icon=service.data.get(ATTR_ICON),
+                    mode=service.data.get(ATTR_ALL),
+                    object_id=object_id,
+                    order=None,
+                )
+                return
 
-            await Group.async_create_group(
-                hass,
-                service.data.get(ATTR_NAME, object_id),
-                created_by_service=True,
-                entity_ids=entity_ids,
-                icon=service.data.get(ATTR_ICON),
-                mode=service.data.get(ATTR_ALL),
-                object_id=object_id,
-                order=None,
-            )
-            return
+            if group is None:
+                _LOGGER.warning(
+                    "%s:Group '%s' doesn't exist!", service.service, object_id
+                )
+                return
 
-        if group is None:
-            _LOGGER.warning("%s:Group '%s' doesn't exist!", service.service, object_id)
-            return
+            # update group
+            if service.service == SERVICE_SET:
+                need_update = False
 
-        # update group
-        if service.service == SERVICE_SET:
-            need_update = False
+                if ATTR_ADD_ENTITIES in service.data:
+                    delta = service.data[ATTR_ADD_ENTITIES]
+                    entity_ids = set(group.tracking) | set(delta)
+                    group.async_update_tracked_entity_ids(entity_ids)
 
-            if ATTR_ADD_ENTITIES in service.data:
-                delta = service.data[ATTR_ADD_ENTITIES]
-                entity_ids = set(group.tracking) | set(delta)
-                group.async_update_tracked_entity_ids(entity_ids)
+                if ATTR_REMOVE_ENTITIES in service.data:
+                    delta = service.data[ATTR_REMOVE_ENTITIES]
+                    entity_ids = set(group.tracking) - set(delta)
+                    group.async_update_tracked_entity_ids(entity_ids)
 
-            if ATTR_REMOVE_ENTITIES in service.data:
-                delta = service.data[ATTR_REMOVE_ENTITIES]
-                entity_ids = set(group.tracking) - set(delta)
-                group.async_update_tracked_entity_ids(entity_ids)
+                if ATTR_ENTITIES in service.data:
+                    entity_ids = service.data[ATTR_ENTITIES]
+                    group.async_update_tracked_entity_ids(entity_ids)
 
-            if ATTR_ENTITIES in service.data:
-                entity_ids = service.data[ATTR_ENTITIES]
-                group.async_update_tracked_entity_ids(entity_ids)
+                if ATTR_NAME in service.data:
+                    group.set_name(service.data[ATTR_NAME])
+                    need_update = True
 
-            if ATTR_NAME in service.data:
-                group.set_name(service.data[ATTR_NAME])
-                need_update = True
+                if ATTR_ICON in service.data:
+                    group.set_icon(service.data[ATTR_ICON])
+                    need_update = True
 
-            if ATTR_ICON in service.data:
-                group.set_icon(service.data[ATTR_ICON])
-                need_update = True
+                if ATTR_ALL in service.data:
+                    group.mode = all if service.data[ATTR_ALL] else any
+                    need_update = True
 
-            if ATTR_ALL in service.data:
-                group.mode = all if service.data[ATTR_ALL] else any
-                need_update = True
+                if need_update:
+                    group.async_write_ha_state()
 
-            if need_update:
-                group.async_write_ha_state()
+                return
 
-            return
-
-        # remove group
-        if service.service == SERVICE_REMOVE:
-            await component.async_remove_entity(entity_id)
+            # remove group
+            if service.service == SERVICE_REMOVE:
+                await component.async_remove_entity(entity_id)
+        except ValueError as e:
+            _LOGGER.error("ValueError handling group service: %s", e)
+        except TypeError as e:
+            _LOGGER.error("TypeError handling group service: %s", e)
+        except KeyError as e:
+            _LOGGER.error("KeyError handling group service: %s", e)
 
     hass.services.async_register(
         DOMAIN,
@@ -300,13 +341,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         schema=vol.All(
             vol.Schema(
                 {
-                    vol.Required(ATTR_OBJECT_ID): cv.slug,
-                    vol.Optional(ATTR_NAME): cv.string,
-                    vol.Optional(ATTR_ICON): cv.string,
-                    vol.Optional(ATTR_ALL): cv.boolean,
-                    vol.Exclusive(ATTR_ENTITIES, "entities"): cv.entity_ids,
-                    vol.Exclusive(ATTR_ADD_ENTITIES, "entities"): cv.entity_ids,
-                    vol.Exclusive(ATTR_REMOVE_ENTITIES, "entities"): cv.entity_ids,
+                    vol.Required(
+                        ATTR_OBJECT_ID, description="Object ID of the group to set"
+                    ): cv.slug,
+                    vol.Optional(ATTR_NAME, description="Name of the group"): cv.string,
+                    vol.Optional(ATTR_ICON, description="Icon of the group"): cv.string,
+                    vol.Optional(
+                        ATTR_ALL, description="Set to True to make this an all-group"
+                    ): cv.boolean,
+                    vol.Exclusive(
+                        ATTR_ENTITIES, "entities", description="Entities of the group"
+                    ): cv.entity_ids,
+                    vol.Exclusive(
+                        ATTR_ADD_ENTITIES,
+                        "entities",
+                        description="Entities to add to the group",
+                    ): cv.entity_ids,
+                    vol.Exclusive(
+                        ATTR_REMOVE_ENTITIES,
+                        "entities",
+                        description="Entities to remove from the group",
+                    ): cv.entity_ids,
                 }
             )
         ),
@@ -316,7 +371,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DOMAIN,
         SERVICE_REMOVE,
         groups_service_handler,
-        schema=vol.Schema({vol.Required(ATTR_OBJECT_ID): cv.slug}),
+        schema=vol.Schema(
+            {
+                vol.Required(
+                    ATTR_OBJECT_ID, description="Object ID of the group to remove"
+                ): cv.slug
+            }
+        ),
     )
 
     return True
