@@ -16,6 +16,7 @@
       'icon': 'mdi:calculator',
       'source_value_valid': True,
       'state_class': 'measurement',
+      'update_count': 1,
     }),
     'state': '16.0',
   })
@@ -29,6 +30,7 @@
       'icon': 'mdi:calculator',
       'source_value_valid': True,
       'state_class': 'measurement',
+      'update_count': 1,
     }),
     'state': '16.0',
   })
@@ -42,6 +44,7 @@
       'icon': 'mdi:calculator',
       'source_value_valid': True,
       'state_class': 'measurement',
+      'update_count': 2,
     }),
     'state': '20.0',
   })

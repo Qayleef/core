@@ -652,17 +652,27 @@ class StatisticsSensor(SensorEntity):
         self._async_purge_update_and_schedule()
 
     def _async_purge_update_and_schedule(self) -> None:
-        """Purge old states, update the sensor and schedule the next update."""
-        _LOGGER.debug("%s: updating statistics", self.entity_id)
+        """Enhanced: Purge old states, update the sensor, and schedule the next update."""
+        _LOGGER.debug("%s: updating statistics with enhancements", self.entity_id)
         if self._samples_max_age is not None:
             self._purge_old_states(self._samples_max_age)
+
+            # Custom purge rule: Remove values older than twice the max age
+            now = dt_util.utcnow()
+            extended_age = self._samples_max_age * 2
+            while self.ages and (now - self.ages[0]) > extended_age:
+                _LOGGER.info(
+                    "%s: Custom purge of record with datetime %s",
+                    self.entity_id,
+                    dt_util.as_local(self.ages[0]),
+                )
+                self.ages.popleft()
+                self.states.popleft()
 
         self._update_attributes()
         self._update_value()
 
         # If max_age is set, ensure to update again after the defined interval.
-        # By basing updates off the timestamps of sampled data we avoid updating
-        # when none of the observed entities change.
         if timestamp := self._async_next_to_purge_timestamp():
             _LOGGER.debug("%s: scheduling update at %s", self.entity_id, timestamp)
             self._async_cancel_update_listener()
@@ -756,20 +766,35 @@ class StatisticsSensor(SensorEntity):
                 self.attributes[STAT_AGE_COVERAGE_RATIO] = None
 
     def _update_value(self) -> None:
-        """Front to call the right statistical characteristics functions.
+        """Front to call the right statistical characteristics functions with enhancements.
 
-        One of the _stat_*() functions is represented by self._state_characteristic_fn().
+        Adds logging for threshold violations and tracks the number of updates.
         """
-
         value = self._state_characteristic_fn()
         _LOGGER.debug(
             "Updating value: states: %s, ages: %s => %s", self.states, self.ages, value
         )
+
         if self._state_characteristic not in STATS_NOT_A_NUMBER:
             with contextlib.suppress(TypeError):
                 value = round(cast(float, value), self._precision)
                 if self._precision == 0:
                     value = int(value)
+
+                # Business rule: Log warning if value exceeds threshold
+                if value > 100:  # Example threshold
+                    _LOGGER.warning(
+                        "Statistics sensor %s exceeded threshold: %s",
+                        self.entity_id,
+                        value,
+                    )
+
+        # Track the number of updates performed count
+        update_count = self.attributes.get("update_count", 0)
+        if not isinstance(update_count, int):
+            update_count = 0
+        self.attributes["update_count"] = update_count + 1
+
         self._attr_native_value = value
 
     def _callable_characteristic_fn(
