@@ -789,7 +789,7 @@ class StatisticsSensor(SensorEntity):
                         value,
                     )
 
-        # Track the number of updates performed
+        # Track the number of updates performed count
         update_count = self.attributes.get("update_count", 0)
         if not isinstance(update_count, int):
             update_count = 0
