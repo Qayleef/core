@@ -23,6 +23,7 @@ from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import ATTR_AUTO, ATTR_ORDER, DATA_COMPONENT, DOMAIN, GROUP_ORDER, REG_KEY
+from .debounce import Debounce
 from .registry import GroupIntegrationRegistry, SingleStateType
 
 ENTITY_ID_FORMAT = DOMAIN + ".{}"
@@ -134,6 +135,7 @@ class Group(Entity):
     trackable: tuple[str, ...]
     single_state_type_key: SingleStateType | None
     _registry: GroupIntegrationRegistry
+    _UPDATE_DELAY = 0.1
 
     def __init__(
         self,
@@ -165,6 +167,9 @@ class Group(Entity):
         self._order = order
         self._assumed_state = False
         self._async_unsub_state_changed: CALLBACK_TYPE | None = None
+        self._debounced_listener = Debounce(self._UPDATE_DELAY)(
+            self._async_debounced_state_changed_listener
+        )
 
     @staticmethod
     @callback
@@ -372,6 +377,16 @@ class Group(Entity):
     async def async_will_remove_from_hass(self) -> None:
         """Handle removal from Home Assistant."""
         self._async_stop()
+        await self._debounced_listener.close()
+
+    async def _async_debounced_state_changed_listener(
+        self, event: Event[EventStateChangedData]
+    ) -> None:
+        """Respond to a member state changing.
+
+        This method must be run in the event loop.
+        """
+        await self._debounced_listener(event)
 
     async def _async_state_changed_listener(
         self, event: Event[EventStateChangedData]
@@ -425,6 +440,7 @@ class Group(Entity):
             self._on_off[entity_id] = state in entity_on_state
 
     @callback
+    # @debounce(_UPDATE_DELAY)
     def _async_update_group_state(self, tr_state: State | None = None) -> None:
         """Update group state.
 
