@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
 from datetime import datetime as dt, timedelta
 from http import HTTPStatus
 from typing import cast
@@ -51,6 +52,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     fetching historical state data.
     """
     hass.http.register_view(HistoryPeriodView())
+    hass.http.register_view(HistoryDiagnosticsView())  # Register diagnostics endpoint
     frontend.async_register_built_in_panel(hass, "history", "history", "hass:chart-box")
     websocket_api.async_setup(hass)
     return True
@@ -333,3 +335,78 @@ class HistoryPeriodView(HomeAssistantView):
                     ).values()
                 )
             )
+
+
+class HistoryDiagnosticsView(HomeAssistantView):
+    """Enhanced Diagnostics view for the history component."""
+
+    url = "/api/history/diagnostics"
+    name = "api:history:diagnostics"
+
+    async def get(self, request: web.Request) -> web.Response:
+        """Handle GET requests for diagnostics."""
+        hass: HomeAssistant = request.app["hass"]
+
+        # Define a time range for diagnostics
+        now = dt_util.utcnow()
+        past_hour = now - timedelta(hours=1)
+
+        # Get all entity IDs known to Home Assistant
+        entity_ids = list(hass.states.async_entity_ids())
+
+        # Initialize trackers for state changes and categories
+        state_change_tracker: defaultdict[str, int] = defaultdict(int)
+        entity_state_changes = {}
+        entity_categories: defaultdict[str, int] = defaultdict(int)
+        total_changes = 0
+
+        # Define routine updates or meaningless states to ignore
+        IGNORE_STATES = {"unknown", "0"}
+
+        for entity_id in entity_ids:
+            state = hass.states.get(entity_id)
+            if state and state.last_changed and state.last_changed > past_hour:
+                if state.state in IGNORE_STATES:
+                    continue  # Skip entities with ignored states
+
+                # Count the state change
+                state_change_tracker[entity_id] += 1
+                entity_state_changes[entity_id] = {
+                    "changes": state_change_tracker[entity_id],
+                    "last_changed": state.last_changed.isoformat(),
+                    "state_value": state.state,
+                }
+                total_changes += 1
+
+                # Categorize changes by domain
+                domain = entity_id.split(".")[0]
+                entity_categories[domain] += 1
+
+        # Identify the top 5 entities with the most frequent state changes
+        frequent_entities = sorted(
+            entity_state_changes.items(),
+            key=lambda x: int(x[1]["changes"])
+            if isinstance(x[1]["changes"], int)
+            else 0,
+            reverse=True,
+        )[:5]
+
+        # Compile diagnostics
+        diagnostics = {
+            "current_time": now.isoformat(),
+            "entities_total": len(entity_ids),
+            "total_state_changes_in_last_hour": total_changes,
+            "entities_with_changes": len(entity_state_changes),
+            "top_changing_entities": [
+                {
+                    "entity_id": entity,
+                    "changes": data["changes"],
+                    "last_changed": data["last_changed"],
+                    "state_value": data["state_value"],
+                }
+                for entity, data in frequent_entities
+            ],
+            "categorized_changes": dict(entity_categories),
+        }
+
+        return web.json_response(diagnostics)
