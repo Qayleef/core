@@ -225,6 +225,7 @@ jobs:
     runs-on: ubuntu-24.04
     if: |
       github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
     needs:
       - info
@@ -435,6 +436,7 @@ jobs:
       - info
     if: |
       github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
     strategy:
       fail-fast: false
@@ -535,6 +537,7 @@ jobs:
     runs-on: ubuntu-24.04
     if: |
       github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
     needs:
       - info
@@ -573,6 +576,7 @@ jobs:
     runs-on: ubuntu-24.04
     if: |
       github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
     needs:
       - info
@@ -608,6 +612,7 @@ jobs:
       - base
     if: |
       (github.event.inputs.pylint-only != 'true'
+        && github.event.inputs.mypy-only != 'true'
         || github.event.inputs.audit-licenses-only == 'true')
       && needs.info.outputs.requirements == 'true'
     strategy:
@@ -650,7 +655,9 @@ jobs:
     name: Check pylint
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    if: github.event.inputs.audit-licenses-only != 'true'
+    if: |
+      github.event.inputs.mypy-only != 'true'
+      && github.event.inputs.audit-licenses-only != 'true'
       || github.event.inputs.pylint-only == 'true'
     needs:
       - info
@@ -695,7 +702,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     if: |
-      (github.event.inputs.audit-licenses-only != 'true'
+      (github.event.inputs.mypy-only != 'true'
+        && github.event.inputs.audit-licenses-only != 'true'
         || github.event.inputs.pylint-only == 'true')
       && (needs.info.outputs.tests_glob || needs.info.outputs.test_full_suite == 'true')
     needs:
@@ -805,6 +813,7 @@ jobs:
       (github.event_name != 'push' || github.event.repository.full_name == 'home-assistant/core')
       && github.event.inputs.lint-only != 'true'
       && github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
       && needs.info.outputs.test_full_suite == 'true'
     needs:
@@ -855,6 +864,7 @@ jobs:
       (github.event_name != 'push' || github.event.repository.full_name == 'home-assistant/core')
       && github.event.inputs.lint-only != 'true'
       && github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
       && needs.info.outputs.test_full_suite == 'true'
     needs:
@@ -865,7 +875,6 @@ jobs:
       - lint-other
       - lint-ruff
       - lint-ruff-format
-      # - mypy
       - prepare-pytest-full
     strategy:
       fail-fast: false
@@ -976,6 +985,7 @@ jobs:
       (github.event_name != 'push' || github.event.repository.full_name == 'home-assistant/core')
       && github.event.inputs.lint-only != 'true'
       && github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
       && needs.info.outputs.mariadb_groups != '[]'
     needs:
@@ -986,7 +996,6 @@ jobs:
       - lint-other
       - lint-ruff
       - lint-ruff-format
-      # - mypy
     strategy:
       fail-fast: false
       matrix:
@@ -1102,6 +1111,7 @@ jobs:
       (github.event_name != 'push' || github.event.repository.full_name == 'home-assistant/core')
       && github.event.inputs.lint-only != 'true'
       && github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
       && needs.info.outputs.postgresql_groups != '[]'
     needs:
@@ -1112,7 +1122,6 @@ jobs:
       - lint-other
       - lint-ruff
       - lint-ruff-format
-      # - mypy
     strategy:
       fail-fast: false
       matrix:
@@ -1249,6 +1258,7 @@ jobs:
       (github.event_name != 'push' || github.event.repository.full_name == 'home-assistant/core')
       && github.event.inputs.lint-only != 'true'
       && github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.mypy-only != 'true'
       && github.event.inputs.audit-licenses-only != 'true'
       && needs.info.outputs.tests_glob
       && needs.info.outputs.test_full_suite == 'false'
