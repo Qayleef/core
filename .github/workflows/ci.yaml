@@ -744,68 +744,68 @@ jobs:
           python --version
           pylint tests/components/${{ needs.info.outputs.tests_glob }}
 
-  # mypy:
-  #   name: Check mypy
-  #   runs-on: ubuntu-24.04
-  #   if: |
-  #     github.event.inputs.pylint-only != 'true'
-  #     && github.event.inputs.audit-licenses-only != 'true'
-  #     || github.event.inputs.mypy-only == 'true'
-  #   needs:
-  #     - info
-  #     - base
-  #   steps:
-  #     - name: Check out code from GitHub
-  #       uses: actions/checkout@v4.2.2
-  #     - name: Set up Python ${{ env.DEFAULT_PYTHON }}
-  #       id: python
-  #       uses: actions/setup-python@v5.3.0
-  #       with:
-  #         python-version: ${{ env.DEFAULT_PYTHON }}
-  #         check-latest: true
-  #     - name: Generate partial mypy restore key
-  #       id: generate-mypy-key
-  #       run: |
-  #         mypy_version=$(cat requirements_test.txt | grep mypy | cut -d '=' -f 3)
-  #         echo "version=$mypy_version" >> $GITHUB_OUTPUT
-  #         echo "key=mypy-${{ env.MYPY_CACHE_VERSION }}-$mypy_version-${{
-  #           env.HA_SHORT_VERSION }}-$(date -u '+%Y-%m-%dT%H:%M:%s')" >> $GITHUB_OUTPUT
-  #     - name: Restore full Python ${{ env.DEFAULT_PYTHON }} virtual environment
-  #       id: cache-venv
-  #       uses: actions/cache/restore@v4.1.2
-  #       with:
-  #         path: venv
-  #         fail-on-cache-miss: true
-  #         key: >-
-  #           ${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{
-  #           needs.info.outputs.python_cache_key }}
-  #     - name: Restore mypy cache
-  #       uses: actions/cache@v4.1.2
-  #       with:
-  #         path: .mypy_cache
-  #         key: >-
-  #           ${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{
-  #           steps.generate-mypy-key.outputs.key }}
-  #         restore-keys: |
-  #           ${{ runner.os }}-${{ steps.python.outputs.python-version }}-mypy-${{
-  #           env.MYPY_CACHE_VERSION }}-${{ steps.generate-mypy-key.outputs.version }}-${{
-  #           env.HA_SHORT_VERSION }}-
-  #     - name: Register mypy problem matcher
-  #       run: |
-  #         echo "::add-matcher::.github/workflows/matchers/mypy.json"
-  #     - name: Run mypy (fully)
-  #       if: needs.info.outputs.test_full_suite == 'true'
-  #       run: |
-  #         . venv/bin/activate
-  #         python --version
-  #         mypy homeassistant pylint
-  #     - name: Run mypy (partially)
-  #       if: needs.info.outputs.test_full_suite == 'false'
-  #       shell: bash
-  #       run: |
-  #         . venv/bin/activate
-  #         python --version
-  #         mypy homeassistant/components/${{ needs.info.outputs.integrations_glob }}
+  mypy:
+    name: Check mypy
+    runs-on: ubuntu-24.04
+    if: |
+      github.event.inputs.pylint-only != 'true'
+      && github.event.inputs.audit-licenses-only != 'true'
+      || github.event.inputs.mypy-only == 'true'
+    needs:
+      - info
+      - base
+    steps:
+      - name: Check out code from GitHub
+        uses: actions/checkout@v4.2.2
+      - name: Set up Python ${{ env.DEFAULT_PYTHON }}
+        id: python
+        uses: actions/setup-python@v5.3.0
+        with:
+          python-version: ${{ env.DEFAULT_PYTHON }}
+          check-latest: true
+      - name: Generate partial mypy restore key
+        id: generate-mypy-key
+        run: |
+          mypy_version=$(cat requirements_test.txt | grep mypy | cut -d '=' -f 3)
+          echo "version=$mypy_version" >> $GITHUB_OUTPUT
+          echo "key=mypy-${{ env.MYPY_CACHE_VERSION }}-$mypy_version-${{
+            env.HA_SHORT_VERSION }}-$(date -u '+%Y-%m-%dT%H:%M:%s')" >> $GITHUB_OUTPUT
+      - name: Restore full Python ${{ env.DEFAULT_PYTHON }} virtual environment
+        id: cache-venv
+        uses: actions/cache/restore@v4.1.2
+        with:
+          path: venv
+          fail-on-cache-miss: true
+          key: >-
+            ${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{
+            needs.info.outputs.python_cache_key }}
+      - name: Restore mypy cache
+        uses: actions/cache@v4.1.2
+        with:
+          path: .mypy_cache
+          key: >-
+            ${{ runner.os }}-${{ steps.python.outputs.python-version }}-${{
+            steps.generate-mypy-key.outputs.key }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.python.outputs.python-version }}-mypy-${{
+            env.MYPY_CACHE_VERSION }}-${{ steps.generate-mypy-key.outputs.version }}-${{
+            env.HA_SHORT_VERSION }}-
+      - name: Register mypy problem matcher
+        run: |
+          echo "::add-matcher::.github/workflows/matchers/mypy.json"
+      - name: Run mypy (fully)
+        if: needs.info.outputs.test_full_suite == 'true'
+        run: |
+          . venv/bin/activate
+          python --version
+          mypy homeassistant pylint
+      - name: Run mypy (partially)
+        if: needs.info.outputs.test_full_suite == 'false'
+        shell: bash
+        run: |
+          . venv/bin/activate
+          python --version
+          mypy homeassistant/components/${{ needs.info.outputs.integrations_glob }}
 
   prepare-pytest-full:
     runs-on: ubuntu-24.04
@@ -875,6 +875,7 @@ jobs:
       - lint-other
       - lint-ruff
       - lint-ruff-format
+      - mypy
       - prepare-pytest-full
     strategy:
       fail-fast: false
@@ -996,6 +997,7 @@ jobs:
       - lint-other
       - lint-ruff
       - lint-ruff-format
+      - mypy
     strategy:
       fail-fast: false
       matrix:
@@ -1122,6 +1124,7 @@ jobs:
       - lint-other
       - lint-ruff
       - lint-ruff-format
+      - mypy
     strategy:
       fail-fast: false
       matrix:
@@ -1270,6 +1273,7 @@ jobs:
       - lint-other
       - lint-ruff
       - lint-ruff-format
+      - mypy
     strategy:
       fail-fast: false
       matrix:
