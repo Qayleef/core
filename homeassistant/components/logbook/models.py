@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING, Any, Final, NamedTuple, cast
 from propcache import cached_property
 from sqlalchemy.engine.row import Row
 
-from homeassistant.components.recorder.filters import Filters
 from homeassistant.components.recorder.models import (
     bytes_to_ulid_or_none,
     bytes_to_uuid_hex_or_none,
@@ -23,15 +22,17 @@ from homeassistant.util.json import json_loads
 from homeassistant.util.ulid import ulid_to_bytes
 
 
-@dataclass(slots=True)
+@dataclass
 class LogbookConfig:
     """Configuration for the logbook integration."""
 
     external_events: dict[
         EventType[Any] | str,
-        tuple[str, Callable[[LazyEventPartialState], dict[str, Any]]],
+        tuple[str, Callable[[Any], dict[str, Any]]],
     ]
-    sqlalchemy_filter: Filters | None = None
+    sqlalchemy_filter: Any | None = None
+    filters: Any | None = None
+    entities_filter: Callable[[str], bool] | None = None
     entity_filter: Callable[[str], bool] | None = None
 
 

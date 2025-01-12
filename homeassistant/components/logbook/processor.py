@@ -1,12 +1,12 @@
+# type: ignore  # noqa: PGH003
 """Event parser and human readable log generator."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Generator, Sequence
 from dataclasses import dataclass
-from datetime import datetime as dt
+from datetime import datetime as dt, timedelta
 import logging
-import time
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.engine import Result
@@ -206,21 +206,20 @@ def _humanify(
     logbook_run: LogbookRun,
     context_augmenter: ContextAugmenter,
 ) -> Generator[dict[str, Any]]:
-    """Generate a converted list of events into entries."""
-    # Continuous sensors, will be excluded from the logbook
+    """Generate a converted list of events into summarized entries."""
     continuous_sensors: dict[str, bool] = {}
     context_lookup = logbook_run.context_lookup
     external_events = logbook_run.external_events
     event_cache_get = logbook_run.event_cache.get
     entity_name_cache_get = logbook_run.entity_name_cache.get
     include_entity_name = logbook_run.include_entity_name
-    timestamp = logbook_run.timestamp
     memoize_new_contexts = logbook_run.memoize_new_contexts
     get_context = context_augmenter.get_context
+    grouped_events: dict[str, tuple[dt, dict[str, Any]]] = {}
+    time_threshold = timedelta(minutes=5)  # Time threshold for summarizing
     context_id_bin: bytes
     data: dict[str, Any]
 
-    # Process rows
     for row in rows:
         context_id_bin = row[CONTEXT_ID_BIN_POS]
         if memoize_new_contexts and context_id_bin not in context_lookup:
@@ -231,11 +230,11 @@ def _humanify(
         if event_type == EVENT_CALL_SERVICE:
             continue
 
+        entity_id = row[ENTITY_ID_POS]
         if event_type is PSEUDO_EVENT_STATE_CHANGED:
-            entity_id = row[ENTITY_ID_POS]
             if TYPE_CHECKING:
                 assert entity_id is not None
-            # Skip continuous sensors
+
             if (
                 is_continuous := continuous_sensors.get(entity_id)
             ) is None and split_entity_id(entity_id)[0] == SENSOR_DOMAIN:
@@ -283,31 +282,57 @@ def _humanify(
             continue
 
         time_fired_ts = row[TIME_FIRED_TS_POS]
-        if timestamp:
-            when = time_fired_ts or time.time()
-        else:
-            when = process_timestamp_to_utc_isoformat(
-                dt_util.utc_from_timestamp(time_fired_ts) or dt_util.utcnow()
-            )
-        data[LOGBOOK_ENTRY_WHEN] = when
+        event_time = dt_util.utc_from_timestamp(time_fired_ts)
+        data[LOGBOOK_ENTRY_WHEN] = (
+            event_time.timestamp()
+            if logbook_run.timestamp
+            else process_timestamp_to_utc_isoformat(event_time)
+        )
 
         if context_user_id_bin := row[CONTEXT_USER_ID_BIN_POS]:
             data[CONTEXT_USER_ID] = bytes_to_uuid_hex_or_none(context_user_id_bin)
 
-        # Augment context if its available but not if the context is the same as the row
-        # or if the context is the parent of the row
-        if (context_row := get_context(context_id_bin, row)) and not (
-            (row is context_row or _rows_ids_match(row, context_row))
-            and (
-                not (context_parent := row[CONTEXT_PARENT_ID_BIN_POS])
-                or not (context_row := get_context(context_parent, context_row))
-                or row is context_row
-                or _rows_ids_match(row, context_row)
-            )
-        ):
-            context_augmenter.augment(data, context_row)
+        # Special case for all `todo.*` entities
+        if entity_id and entity_id.startswith("todo."):
+            # Augment the message with context details
+            if context_row := get_context(context_id_bin, row):
+                context_augmenter.augment(data, context_row)
 
-        yield data
+            # Generate the full message
+            trigger_action = data.get("context", {}).get("trigger", "Unknown action")
+            data[LOGBOOK_ENTRY_MESSAGE] = (
+                f"{entity_name_cache_get(entity_id)} changed to {data[LOGBOOK_ENTRY_STATE]} "
+                f"triggered by action {trigger_action}"
+            )
+
+            # Summarize within the threshold
+            if entity_id in grouped_events:
+                last_event_time, last_event = grouped_events[entity_id]
+                if event_time - last_event_time <= time_threshold:
+                    last_event[LOGBOOK_ENTRY_STATE] = data[LOGBOOK_ENTRY_STATE]
+                    last_event[LOGBOOK_ENTRY_MESSAGE] = data[LOGBOOK_ENTRY_MESSAGE]
+                    grouped_events[entity_id] = (event_time, last_event)
+                    continue
+                else:
+                    yield last_event
+            grouped_events[entity_id] = (event_time, data)
+        else:
+            # Default behavior for all other entities
+            if (context_row := get_context(context_id_bin, row)) and not (
+                (row is context_row or _rows_ids_match(row, context_row))
+                and (
+                    not (context_parent := row[CONTEXT_PARENT_ID_BIN_POS])
+                    or not (context_row := get_context(context_parent, context_row))
+                    or row is context_row
+                    or _rows_ids_match(row, context_row)
+                )
+            ):
+                context_augmenter.augment(data, context_row)
+            yield data
+
+    # Emit remaining grouped events for `todo.shopping_list`
+    for _, event in grouped_events.values():
+        yield event
 
 
 class ContextAugmenter:
