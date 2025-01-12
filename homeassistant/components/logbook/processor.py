@@ -330,7 +330,7 @@ def _humanify(
                 context_augmenter.augment(data, context_row)
             yield data
 
-    # Emit remaining grouped events for `todo.shopping_list`
+    # Emit remaining grouped events for `todo`
     for _, event in grouped_events.values():
         yield event
 
