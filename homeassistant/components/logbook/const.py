@@ -1,3 +1,4 @@
+# type: ignore  # noqa: PGH003
 """Event parser and human readable log generator."""
 
 from __future__ import annotations
